@@ -11,10 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make build                       # swift build (debug)
 make app                         # release + упаковка в build/CatIsNotHelper.app (scripts/build-app.sh)
+make app-universal               # то же с ARCHS="arm64 x86_64"
 make run                         # make app + open
 make install                     # копия в /Applications
 scripts/build-app.sh debug       # бандл из debug-сборки
 ```
+
+CI: `.github/workflows/build.yml` на `macos-15` собирает универсальный бандл тем же скриптом, проверяет `lipo -archs`, `codesign --verify` и `--render`, выкладывает zip артефактом; тег `v*` создаёт релиз. Сертификата в CI нет, там подпись ad-hoc. Любое изменение сборки делать в `scripts/build-app.sh`, а не в workflow, чтобы локальная и CI-сборка не расходились.
 
 Если `swift build` падает с «missing DEVELOPER_DIR path», значит `xcode-select` смотрит на несуществующий Xcode. `scripts/build-app.sh` сам подставляет `/Applications/Xcode.app`; для голого `swift build` нужно `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build`.
 

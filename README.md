@@ -28,17 +28,30 @@
 | Drag & drop картинки на котика | котик берёт её в лапки |
 | Иконка 🐾 в меню-баре | статистика, скриншот, галерея, настройки |
 
+## Скачать
+
+Готовые универсальные сборки (Apple Silicon + Intel) лежат в [Releases](../../releases).
+Каждый пуш в Master тоже собирает архив, он доступен как артефакт в [Actions](../../actions).
+
+Сборки из CI подписаны ad-hoc, поэтому macOS при первом запуске ругается на неизвестного
+разработчика: правый клик → «Открыть», либо `xattr -d com.apple.quarantine CatIsNotHelper.app`.
+
 ## Сборка
 
 Нужен Xcode 15+ (macOS 13+).
 
 ```bash
-make app        # собрать build/CatIsNotHelper.app
-make run        # собрать и запустить
-make install    # скопировать в /Applications
+make app            # собрать build/CatIsNotHelper.app под текущую архитектуру
+make app-universal  # arm64 + x86_64 в одном бинарнике
+make run            # собрать и запустить
+make install        # скопировать в /Applications
 ```
 
-Или вручную: `swift build -c release`, затем `scripts/build-app.sh`.
+Или вручную: `scripts/build-app.sh [debug|release]`, переменные `ARCHS="arm64 x86_64"` и `CODESIGN_IDENTITY`.
+
+CI (`.github/workflows/build.yml`) на каждый пуш и PR собирает универсальный бандл, проверяет
+архитектуры через `lipo`, подпись и отладочный рендер котика, выкладывает zip как артефакт.
+Тег `v*` дополнительно публикует релиз с этим архивом.
 
 При первом запуске macOS спросит разрешение «Универсальный доступ» (Accessibility):
 без него котик не видит нажатия в других приложениях. Если окно не появилось:

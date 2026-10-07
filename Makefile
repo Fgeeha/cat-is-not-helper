@@ -1,10 +1,13 @@
-.PHONY: build app run install clean
+.PHONY: build app app-universal run install clean
 
 build:
 	swift build
 
 app:
 	scripts/build-app.sh release
+
+app-universal:
+	ARCHS="arm64 x86_64" scripts/build-app.sh release
 
 run: app
 	open build/CatIsNotHelper.app

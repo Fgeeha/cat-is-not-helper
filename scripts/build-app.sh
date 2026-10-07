@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Собирает CatIsNotHelper.app из Swift-пакета.
 # Использование: scripts/build-app.sh [debug|release]
+#   ARCHS="arm64 x86_64" — универсальный бинарник (по умолчанию только текущая архитектура)
+#   CODESIGN_IDENTITY="…"  — чем подписывать (иначе первый «Apple Development», иначе ad-hoc)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
+ARCH_FLAGS=()
+for arch in ${ARCHS:-}; do
+  ARCH_FLAGS+=(--arch "$arch")
+done
 
 # Если DEVELOPER_DIR указывает в никуда — берём обычный Xcode.
 if [ ! -d "${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || echo /nonexistent)}" ]; then
@@ -13,8 +19,8 @@ if [ ! -d "${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || echo /nonexistent)}
   fi
 fi
 
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/CatIsNotHelper"
+swift build -c "$CONFIG" "${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}"
+BIN="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}" --show-bin-path)/CatIsNotHelper"
 
 APP="build/CatIsNotHelper.app"
 rm -rf "$APP"
@@ -42,4 +48,5 @@ else
   codesign --force --sign - "$APP"
   echo "Внимание: ad-hoc подпись. После каждой пересборки придётся заново выдавать доступ в «Универсальном доступе»."
 fi
+echo "Архитектуры: $(lipo -archs "$APP/Contents/MacOS/CatIsNotHelper")"
 echo "Готово: $APP"

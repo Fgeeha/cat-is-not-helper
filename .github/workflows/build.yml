@@ -1,0 +1,74 @@
+name: Сборка
+
+on:
+  push:
+    branches: [Master]
+    tags: ["v*"]
+  pull_request:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Универсальный бандл macOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Версии инструментов
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Кэш SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Сборка arm64 + x86_64
+        run: ARCHS="arm64 x86_64" scripts/build-app.sh release
+
+      - name: Проверка архитектур
+        run: |
+          BIN=build/CatIsNotHelper.app/Contents/MacOS/CatIsNotHelper
+          lipo -archs "$BIN" | tee /dev/stderr | grep -q "x86_64" || { echo "нет x86_64"; exit 1; }
+          lipo -archs "$BIN" | grep -q "arm64" || { echo "нет arm64"; exit 1; }
+          codesign --verify --deep --strict build/CatIsNotHelper.app
+
+      - name: Проверка рендера
+        run: |
+          BIN=build/CatIsNotHelper.app/Contents/MacOS/CatIsNotHelper
+          "$BIN" --render cat.png ginger normal "" "ci"
+          test -s cat.png
+
+      - name: Архив
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          [[ "$GITHUB_REF_TYPE" == "tag" ]] || VERSION="${GITHUB_SHA::7}"
+          ditto -c -k --keepParent build/CatIsNotHelper.app "CatIsNotHelper-${VERSION}-universal.zip"
+          echo "ZIP=CatIsNotHelper-${VERSION}-universal.zip" >> "$GITHUB_ENV"
+
+      - name: Артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: CatIsNotHelper-universal
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+      - name: Релиз
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP }}
+          generate_release_notes: true
+          body: |
+            Универсальная сборка (Apple Silicon + Intel), macOS 13+.
+
+            Сборка подписана ad-hoc, поэтому при первом запуске macOS спросит подтверждение:
+            правый клик по приложению → «Открыть», либо `xattr -d com.apple.quarantine CatIsNotHelper.app`.
