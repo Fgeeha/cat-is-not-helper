@@ -27,5 +27,19 @@ if [ ! -f Resources/AppIcon.icns ] && command -v swift >/dev/null; then
 fi
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-codesign --force --sign - "$APP" >/dev/null
+# Подпись. Разрешение «Универсальный доступ» привязано к подписи приложения:
+# у ad-hoc подписи она меняется при каждой сборке, и доступ слетает.
+# Поэтому берём стабильный сертификат: из CODESIGN_IDENTITY или первый «Apple Development».
+IDENTITY="${CODESIGN_IDENTITY:-}"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -oE '"Apple Development: [^"]+"' | tr -d '"' || true)"
+fi
+if [ -n "$IDENTITY" ]; then
+  codesign --force --options runtime --sign "$IDENTITY" "$APP" 2>/dev/null \
+    || codesign --force --sign "$IDENTITY" "$APP"
+  echo "Подписано: $IDENTITY"
+else
+  codesign --force --sign - "$APP"
+  echo "Внимание: ad-hoc подпись. После каждой пересборки придётся заново выдавать доступ в «Универсальном доступе»."
+fi
 echo "Готово: $APP"
