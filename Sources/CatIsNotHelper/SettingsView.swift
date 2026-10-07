@@ -7,6 +7,8 @@ struct SettingsView: View {
     let requestAccess: () -> Void
 
     @State private var trusted = false
+    @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @State private var launchError: String?
     private let poll = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -32,6 +34,31 @@ struct SettingsView: View {
                 Toggle("Поверх всех окон", isOn: $settings.alwaysOnTop)
                 Toggle("На всех рабочих столах", isOn: $settings.allSpaces)
                 Toggle("Показывать котика", isOn: $settings.catVisible)
+            }
+
+            Section("Запуск") {
+                Toggle("Запускать при входе в систему", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { enabled in
+                        do {
+                            try LaunchAtLogin.set(enabled)
+                            launchError = nil
+                        } catch {
+                            launchError = error.localizedDescription
+                            launchAtLogin = LaunchAtLogin.isEnabled
+                        }
+                    }
+                if LaunchAtLogin.requiresApproval {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                        Text("Автозапуск отключён в системе — разреши его в «Объектах входа».")
+                        Spacer()
+                        Button("Открыть") { LaunchAtLogin.openSystemSettings() }
+                    }
+                    .font(.caption)
+                }
+                if let launchError {
+                    Text(launchError).font(.caption).foregroundColor(.red)
+                }
             }
 
             Section("Доступ к клавиатуре") {
@@ -61,8 +88,11 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 560)
+        .frame(width: 440, height: 640)
         .onAppear { trusted = isTrusted() }
-        .onReceive(poll) { _ in trusted = isTrusted() }
+        .onReceive(poll) { _ in
+            trusted = isTrusted()
+            launchAtLogin = LaunchAtLogin.isEnabled
+        }
     }
 }
