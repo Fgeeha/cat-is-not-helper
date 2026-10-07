@@ -31,8 +31,36 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
+      # Необязательно: стабильная подпись, чтобы разрешение «Универсальный доступ»
+      # переживало обновления. Секреты: MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, MACOS_CERT_IDENTITY.
+      - name: Импорт сертификата подписи
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_CERT_IDENTITY }}
+        run: |
+          if [ -z "$P12_BASE64" ]; then
+            echo "Сертификата нет, будет ad-hoc подпись"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
       - name: Сборка arm64 + x86_64
-        run: ARCHS="arm64 x86_64" scripts/build-app.sh release
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            export VERSION="${GITHUB_REF_NAME#v}" RELEASE_BUILD=1
+          fi
+          ARCHS="arm64 x86_64" scripts/build-app.sh release
 
       - name: Проверка архитектур
         run: |
@@ -70,5 +98,6 @@ jobs:
           body: |
             Универсальная сборка (Apple Silicon + Intel), macOS 13+.
 
-            Сборка подписана ad-hoc, поэтому при первом запуске macOS спросит подтверждение:
+            Приложение само предложит обновиться до этой версии через меню 🐾.
+            Если сборка подписана ad-hoc, при первом запуске macOS спросит подтверждение:
             правый клик по приложению → «Открыть», либо `xattr -d com.apple.quarantine CatIsNotHelper.app`.

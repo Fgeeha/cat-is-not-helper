@@ -4,8 +4,11 @@ import Combine
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var state: CatState
+    @ObservedObject var updates: UpdateChecker
     let isTrusted: () -> Bool
     let requestAccess: () -> Void
+    let checkUpdates: () -> Void
+    let installUpdate: () -> Void
 
     @State private var trusted = false
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
@@ -128,6 +131,24 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Обновления") {
+                HStack {
+                    Text("Текущая версия: \(UpdateChecker.currentVersion)")
+                    if !UpdateChecker.isReleaseBuild {
+                        Text("(локальная сборка)").foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Проверить сейчас") { checkUpdates() }
+                        .disabled(updates.status == .checking)
+                }
+                Toggle("Проверять обновления автоматически", isOn: $settings.checkUpdates)
+                    .disabled(!UpdateChecker.isReleaseBuild)
+                updateStatusRow
+                Text("Обновления берутся из GitHub Releases. Приложение скачает архив, заменит себя и перезапустится; статистика и настройки сохраняются.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             Section("Доступ к клавиатуре") {
                 HStack(spacing: 8) {
                     Image(systemName: trusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -159,5 +180,34 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder private var updateStatusRow: some View {
+        switch updates.status {
+        case .idle:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Проверяю…") }
+        case .upToDate:
+            Label("У тебя последняя версия", systemImage: "checkmark.circle.fill").foregroundColor(.green)
+        case .available(let version):
+            HStack {
+                Label("Доступна версия \(version)", systemImage: "arrow.down.circle.fill").foregroundColor(.orange)
+                Spacer()
+                Button("Обновить") { installUpdate() }.buttonStyle(.borderedProminent)
+                if let page = updates.available?.pageURL {
+                    Button("Что нового") { NSWorkspace.shared.open(page) }
+                }
+            }
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Скачиваю… \(Int(progress * 100))%")
+                ProgressView(value: progress)
+            }
+        case .installing:
+            HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Устанавливаю и перезапускаюсь…") }
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill").foregroundColor(.red)
+        }
     }
 }

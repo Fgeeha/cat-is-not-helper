@@ -7,8 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = CatState()
     let stats = StatsStore()
     let shots = ScreenshotManager()
+    let updates = UpdateChecker()
 
     private var monitor = InputMonitor()
+    private var updateTimer: Timer?
     private var panel: CatPanel!
     private var statusBar: StatusBarController!
     private var windows: [String: NSWindow] = [:]
@@ -78,6 +80,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async { self?.applySettings() }
             }
             .store(in: &cancellables)
+
+        scheduleUpdateChecks()
+    }
+
+    // MARK: - Обновления
+
+    private func scheduleUpdateChecks() {
+        guard UpdateChecker.isReleaseBuild else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in self?.autoCheckUpdates() }
+        let timer = Timer(timeInterval: 6 * 60 * 60, repeats: true) { [weak self] _ in self?.autoCheckUpdates() }
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
+    }
+
+    private func autoCheckUpdates() {
+        guard settings.checkUpdates else { return }
+        updates.check { [weak self] info in
+            guard let self, let info else { return }
+            self.state.say("есть обновление v\(info.version) — в меню 🐾", seconds: 6)
+        }
+    }
+
+    func checkUpdatesNow() {
+        updates.check { [weak self] info in
+            guard let self else { return }
+            if let info {
+                self.state.say("есть обновление v\(info.version)", seconds: 5)
+            } else if case .upToDate = self.updates.status {
+                self.state.say("у меня последняя версия")
+            }
+        }
+    }
+
+    func installUpdate() {
+        guard let info = updates.available else { return }
+        state.say("качаю v\(info.version)…", seconds: 60)
+        updates.install(info) { [weak self] in self?.relaunch() }
+    }
+
+    private func relaunch() {
+        stats.save()
+        let path = Bundle.main.bundleURL.path
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "sleep 1; /usr/bin/open \"\(path)\""]
+        try? process.run()
+        NSApp.terminate(nil)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -195,9 +244,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showSettings() {
         show(id: "settings", title: "Настройки котика", size: NSSize(width: 760, height: 640),
-             view: SettingsView(settings: settings, state: state,
+             view: SettingsView(settings: settings, state: state, updates: updates,
                                 isTrusted: { InputMonitor.isTrusted(prompt: false) },
-                                requestAccess: { [weak self] in self?.requestAccess() }))
+                                requestAccess: { [weak self] in self?.requestAccess() },
+                                checkUpdates: { [weak self] in self?.checkUpdatesNow() },
+                                installUpdate: { [weak self] in self?.installUpdate() }))
     }
 
     func quit() {

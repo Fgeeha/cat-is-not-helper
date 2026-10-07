@@ -3,6 +3,8 @@
 # Использование: scripts/build-app.sh [debug|release]
 #   ARCHS="arm64 x86_64" — универсальный бинарник (по умолчанию только текущая архитектура)
 #   CODESIGN_IDENTITY="…"  — чем подписывать (иначе первый «Apple Development», иначе ad-hoc)
+#   VERSION="1.2.3"        — версия в Info.plist (CI берёт из тега)
+#   RELEASE_BUILD=1        — пометить сборку релизной: включает автопроверку обновлений
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,6 +29,15 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/CatIsNotHelper"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+PLIST="$APP/Contents/Info.plist"
+if [ -n "${VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+fi
+if [ "${RELEASE_BUILD:-0}" = "1" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CatReleaseBuild true" "$PLIST"
+fi
+echo "Версия: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")$([ "${RELEASE_BUILD:-0}" = "1" ] && echo ' (релиз)')"
 
 if [ ! -f Resources/AppIcon.icns ] && command -v swift >/dev/null; then
   swift scripts/make-icon.swift Resources/AppIcon.icns || true

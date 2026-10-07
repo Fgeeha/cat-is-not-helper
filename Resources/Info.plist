@@ -30,6 +30,8 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>CatReleaseBuild</key>
+    <false/>
     <key>NSHumanReadableCopyright</key>
     <string>Котик не помогает. Котик тапает.</string>
 </dict>

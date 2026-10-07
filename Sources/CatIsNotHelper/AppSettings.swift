@@ -163,8 +163,10 @@ final class AppSettings: ObservableObject {
     @Published var allSpaces: Bool { didSet { ud.set(allSpaces, forKey: "allSpaces") } }
     @Published var bubbles: Bool { didSet { ud.set(bubbles, forKey: "bubbles") } }
     @Published var catVisible: Bool { didSet { ud.set(catVisible, forKey: "catVisible") } }
+    @Published var checkUpdates: Bool { didSet { ud.set(checkUpdates, forKey: "checkUpdates") } }
 
     private init() {
+        checkUpdates = ud.object(forKey: "checkUpdates") as? Bool ?? true
         scale = ud.object(forKey: "scale") as? Double ?? 1.0
         opacity = ud.object(forKey: "opacity") as? Double ?? 1.0
         fur = FurStyle(rawValue: ud.string(forKey: "fur") ?? "") ?? .ginger

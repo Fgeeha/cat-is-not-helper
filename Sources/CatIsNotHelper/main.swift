@@ -64,6 +64,23 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--render-stats
     exit(0)
 }
 
+// Отладочный режим: `CatIsNotHelper --check-updates` опрашивает GitHub Releases и печатает результат.
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "--check-updates" {
+    print("текущая версия: \(UpdateChecker.currentVersion), релизная сборка: \(UpdateChecker.isReleaseBuild)")
+    for (a, b) in [("1.2.0", "1.1.9"), ("1.0.0", "1.0.0"), ("0.9", "1.0.0"), ("v2.0.0-beta", "1.9.9")] {
+        print("isNewer(\(a), than: \(b)) = \(UpdateChecker.isNewer(a, than: b))")
+    }
+    let checker = UpdateChecker()
+    checker.check { info in
+        print("статус: \(checker.status)")
+        if let info { print("доступно: \(info.version) → \(info.downloadURL)") }
+        exit(0)
+    }
+    RunLoop.main.run(until: Date().addingTimeInterval(20))
+    print("таймаут")
+    exit(1)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -32,6 +32,16 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         if app.state.needsAccess {
             menu.addItem(action("⚠️ Дать доступ к клавиатуре…", #selector(requestAccess)))
         }
+        switch app.updates.status {
+        case .available(let version):
+            menu.addItem(action("⬆️ Обновить до v\(version)…", #selector(installUpdate)))
+        case .downloading(let progress):
+            menu.addItem(info("Скачиваю обновление… \(Int(progress * 100))%"))
+        case .installing:
+            menu.addItem(info("Устанавливаю обновление…"))
+        default:
+            break
+        }
         menu.addItem(.separator())
         menu.addItem(action("Статистика…", #selector(showStats), key: "s"))
         menu.addItem(action("Сделать скриншот — котик подержит", #selector(takeScreenshot), key: "4"))
@@ -96,6 +106,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         app.settings.fur = fur
     }
 
+    @objc private func installUpdate() { app.installUpdate() }
     @objc private func showStats() { app.showStats() }
     @objc private func showGallery() { app.showGallery() }
     @objc private func showSettings() { app.showSettings() }
