@@ -4,6 +4,8 @@ import SwiftUI
 struct CatView: View {
     @ObservedObject var state: CatState
     @ObservedObject var settings: AppSettings
+    /// Если задан, используется вместо settings.scale (для превью в настройках).
+    var fixedScale: Double? = nil
 
     static let design = CGSize(width: 260, height: 230)
 
@@ -11,31 +13,72 @@ struct CatView: View {
         CGSize(width: design.width * scale, height: design.height * scale)
     }
 
+    /// Область картинки в лапках (дизайн-координаты, y вниз) — для перетаскивания наружу.
+    static let heldImageRect = CGRect(x: 75, y: 125, width: 110, height: 78)
+
     private var fur: FurStyle { settings.fur }
     private var holding: Bool { state.heldImage != nil }
+    private var scale: Double { fixedScale ?? settings.scale }
+    private var eyeColor: Color { settings.eyeColor.color ?? fur.eye }
 
     var body: some View {
         ZStack {
-            tail
-            Ellipse().fill(fur.fur).frame(width: 150, height: 105).position(x: 130, y: 166)
-            Ellipse().fill(fur.belly).frame(width: 86, height: 64).position(x: 130, y: 180)
-            ears
-            Circle().fill(fur.fur).frame(width: 112, height: 112).position(x: 130, y: 98)
-            stripes
-            face
-            laptop
-            heldImage
-            PawView(fur: fur, down: state.leftDown, holding: holding, side: .left)
-            PawView(fur: fur, down: state.rightDown, holding: holding, side: .right)
-            food
-            hearts
+            // Тело и всё, что можно отразить
+            ZStack {
+                tail
+                Ellipse().fill(fur.fur).frame(width: 150, height: 105).position(x: 130, y: 166)
+                Ellipse().fill(fur.belly).frame(width: 86, height: 64).position(x: 130, y: 180)
+                ears
+                Circle().fill(fur.fur).frame(width: 112, height: 112).position(x: 130, y: 98)
+                stripes
+                face
+                accessoryBehindPaws
+                laptop
+                heldImage
+                PawView(fur: fur, down: settings.mirrored ? state.rightDown : state.leftDown, holding: holding, side: .left)
+                PawView(fur: fur, down: settings.mirrored ? state.leftDown : state.rightDown, holding: holding, side: .right)
+                food
+                hearts
+            }
+            .scaleEffect(x: settings.mirrored ? -1 : 1, y: 1)
+            // Текст не отражаем
             zzz
             bubble
         }
         .frame(width: Self.design.width, height: Self.design.height)
-        .scaleEffect(settings.scale)
-        .frame(width: Self.design.width * settings.scale, height: Self.design.height * settings.scale)
-        .opacity(settings.opacity)
+        .scaleEffect(scale)
+        .frame(width: Self.design.width * scale, height: Self.design.height * scale)
+        .opacity(fixedScale == nil ? settings.opacity : 1)
+    }
+
+    // MARK: - Аксессуары
+
+    @ViewBuilder private var accessoryBehindPaws: some View {
+        switch settings.accessory {
+        case .none:
+            EmptyView()
+        case .bow:
+            BowView().position(x: 92, y: 80)
+        case .glasses:
+            GlassesShape()
+                .stroke(Color(red: 0.2, green: 0.2, blue: 0.25), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .frame(width: 80, height: 30)
+                .position(x: 130, y: 97)
+        case .hat:
+            ZStack {
+                Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.3)).frame(width: 58, height: 30).offset(y: 2)
+                Capsule().fill(Color.white.opacity(0.9)).frame(width: 62, height: 10).offset(y: 14)
+                Circle().fill(Color.white).frame(width: 14).offset(y: -14)
+            }
+            .position(x: 130, y: 40)
+        case .scarf:
+            ZStack {
+                Capsule().fill(Color(red: 0.85, green: 0.25, blue: 0.3)).frame(width: 92, height: 18)
+                RoundedRectangle(cornerRadius: 5).fill(Color(red: 0.85, green: 0.25, blue: 0.3)).frame(width: 14, height: 30).offset(x: 30, y: 18)
+                Capsule().fill(Color.white.opacity(0.7)).frame(width: 10, height: 3).offset(x: 30, y: 29)
+            }
+            .position(x: 130, y: 152)
+        }
     }
 
     // MARK: - Части
@@ -84,8 +127,8 @@ struct CatView: View {
                 Circle().fill(Color(red: 1, green: 0.6, blue: 0.65).opacity(0.45)).frame(width: 16).position(x: 94, y: 112)
                 Circle().fill(Color(red: 1, green: 0.6, blue: 0.65).opacity(0.45)).frame(width: 16).position(x: 166, y: 112)
             }
-            EyeView(mood: state.mood, blinking: state.blinking, color: fur.eye, lid: fur.fur).position(x: 108, y: 96)
-            EyeView(mood: state.mood, blinking: state.blinking, color: fur.eye, lid: fur.fur).position(x: 152, y: 96)
+            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur).position(x: 108, y: 96)
+            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur).position(x: 152, y: 96)
             NoseShape().fill(Color(red: 0.95, green: 0.55, blue: 0.6)).frame(width: 12, height: 8).position(x: 130, y: 112)
             mouth
             WhiskerShape().stroke(fur.outline, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
@@ -105,12 +148,12 @@ struct CatView: View {
 
     private var laptop: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(Color(red: 0.23, green: 0.25, blue: 0.3)).frame(width: 184, height: 34)
+            RoundedRectangle(cornerRadius: 6).fill(settings.keyboard.base).frame(width: 184, height: 34)
             VStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { row in
                     HStack(spacing: 3) {
                         ForEach(0..<(14 - row), id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 1.5).fill(Color.white.opacity(0.35)).frame(width: 8, height: 6)
+                            RoundedRectangle(cornerRadius: 1.5).fill(settings.keyboard.keys).frame(width: 8, height: 6)
                         }
                     }
                 }
@@ -316,6 +359,35 @@ struct WhiskerShape: Shape {
             p.addLine(to: b)
         }
         return p
+    }
+}
+
+struct GlassesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let r = rect.height / 2
+        let left = CGRect(x: rect.minX + 4, y: rect.minY, width: r * 2, height: r * 2)
+        let right = CGRect(x: rect.maxX - 4 - r * 2, y: rect.minY, width: r * 2, height: r * 2)
+        p.addEllipse(in: left)
+        p.addEllipse(in: right)
+        p.move(to: CGPoint(x: left.maxX, y: rect.midY - 2))
+        p.addQuadCurve(to: CGPoint(x: right.minX, y: rect.midY - 2), control: CGPoint(x: rect.midX, y: rect.midY - 8))
+        p.move(to: CGPoint(x: left.minX, y: rect.midY - 2))
+        p.addLine(to: CGPoint(x: rect.minX - 6, y: rect.midY - 6))
+        p.move(to: CGPoint(x: right.maxX, y: rect.midY - 2))
+        p.addLine(to: CGPoint(x: rect.maxX + 6, y: rect.midY - 6))
+        return p
+    }
+}
+
+struct BowView: View {
+    private let color = Color(red: 0.9, green: 0.3, blue: 0.4)
+    var body: some View {
+        ZStack {
+            Ellipse().fill(color).frame(width: 18, height: 12).rotationEffect(.degrees(-15)).offset(x: -10)
+            Ellipse().fill(color).frame(width: 18, height: 12).rotationEffect(.degrees(15)).offset(x: 10)
+            Circle().fill(color.opacity(0.8)).frame(width: 8)
+        }
     }
 }
 

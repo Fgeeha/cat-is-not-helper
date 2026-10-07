@@ -130,12 +130,12 @@ final class CatState: ObservableObject {
         say(["держу!", "о, скриншот", "не потеряю", "моя прелесть"].randomElement()!)
     }
 
-    func putAway() {
+    func putAway(message: String? = "ладно, забирай") {
         withAnimation(.easeInOut(duration: 0.25)) {
             heldImage = nil
             heldURL = nil
         }
-        say("ладно, забирай")
+        if let message { say(message) }
     }
 
     func say(_ text: String, seconds: Double = 2.6) {

@@ -8,6 +8,11 @@ if CommandLine.arguments.count >= 3, CommandLine.arguments[1] == "--render" {
     if CommandLine.arguments.count >= 4, let fur = FurStyle(rawValue: CommandLine.arguments[3]) { settings.fur = fur }
     settings.scale = 1
     settings.opacity = 1
+    let env = ProcessInfo.processInfo.environment
+    settings.accessory = Accessory(rawValue: env["CAT_ACCESSORY"] ?? "") ?? .none
+    settings.eyeColor = EyeColorChoice(rawValue: env["CAT_EYES"] ?? "") ?? .auto
+    settings.keyboard = KeyboardStyle(rawValue: env["CAT_KEYBOARD"] ?? "") ?? .dark
+    settings.mirrored = env["CAT_MIRROR"] == "1"
     let state = CatState()
     if CommandLine.arguments.count >= 5 {
         switch CommandLine.arguments[4] {

@@ -45,6 +45,20 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(action("Покормить 🐟", #selector(feed), key: "f"))
         menu.addItem(.separator())
         menu.addItem(action(app.settings.catVisible ? "Спрятать котика" : "Показать котика", #selector(toggleCat), key: "h"))
+        menu.addItem(submenu("Размер", items: SizePreset.allCases.map { preset in
+            let item = NSMenuItem(title: "\(preset.title) · \(Int(preset.scale * 100))%", action: #selector(setSize(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = preset.rawValue
+            item.state = SizePreset.closest(to: app.settings.scale) == preset ? .on : .off
+            return item
+        }))
+        menu.addItem(submenu("Окрас", items: FurStyle.allCases.map { fur in
+            let item = NSMenuItem(title: fur.title, action: #selector(setFur(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = fur.rawValue
+            item.state = app.settings.fur == fur ? .on : .off
+            return item
+        }))
         menu.addItem(action("Настройки…", #selector(showSettings), key: ","))
         menu.addItem(.separator())
         menu.addItem(action("Выйти", #selector(quit), key: "q"))
@@ -62,7 +76,25 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         return item
     }
 
+    private func submenu(_ title: String, items: [NSMenuItem]) -> NSMenuItem {
+        let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let sub = NSMenu(title: title)
+        items.forEach { sub.addItem($0) }
+        parent.submenu = sub
+        return parent
+    }
+
     // MARK: - Действия
+
+    @objc private func setSize(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let preset = SizePreset(rawValue: raw) else { return }
+        app.settings.scale = preset.scale
+    }
+
+    @objc private func setFur(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let fur = FurStyle(rawValue: raw) else { return }
+        app.settings.fur = fur
+    }
 
     @objc private func showStats() { app.showStats() }
     @objc private func showGallery() { app.showGallery() }

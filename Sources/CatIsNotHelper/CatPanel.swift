@@ -3,11 +3,20 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Контейнер, который ловит клики/перетаскивание/drag&drop поверх SwiftUI-котика.
-final class CatContainerView: NSView {
+final class CatContainerView: NSView, NSDraggingSource {
     var onClick: (() -> Void)?
     var onDoubleClick: (() -> Void)?
     var onDropFiles: (([URL]) -> Void)?
     var menuProvider: (() -> NSMenu)?
+    /// Что котик держит сейчас (файл и миниатюра), чтобы это можно было утащить из лапок.
+    var heldItemProvider: (() -> (url: URL, image: NSImage)?)?
+    /// Картинку потянули из лапок — котик сразу её отпускает.
+    var onHeldDragBegan: (() -> Void)?
+    /// Перетаскивание закончилось: файл, и доставили ли его куда-то (false — бросили в пустоту).
+    var onHeldDragEnded: ((URL, Bool) -> Void)?
+    private var draggedURL: URL?
+    /// Область картинки в лапках в координатах вью (обновляет панель при смене масштаба).
+    var heldHitRect = NSRect.zero
 
     private var dragging = false
     private var downPoint = NSPoint.zero
@@ -36,8 +45,32 @@ final class CatContainerView: NSView {
         let p = event.locationInWindow
         if hypot(p.x - downPoint.x, p.y - downPoint.y) > 3 {
             dragging = true
-            window?.performDrag(with: event)
+            if let held = heldItemProvider?(), heldHitRect.contains(convert(downPoint, from: nil)) {
+                beginHeldDrag(held, event: event)
+            } else {
+                window?.performDrag(with: event)
+            }
         }
+    }
+
+    // MARK: Утащить картинку из лапок
+
+    private func beginHeldDrag(_ held: (url: URL, image: NSImage), event: NSEvent) {
+        let item = NSDraggingItem(pasteboardWriter: held.url as NSURL)
+        item.setDraggingFrame(heldHitRect, contents: held.image)
+        draggedURL = held.url
+        onHeldDragBegan?()
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        .copy
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        guard let url = draggedURL else { return }
+        draggedURL = nil
+        onHeldDragEnded?(url, !operation.isEmpty)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -124,6 +157,14 @@ final class CatPanel: NSPanel {
             setFrame(f, display: true)
             keepOnScreen()
         }
+
+        // Область картинки: дизайн-координаты (y вниз) → координаты вью (y вверх).
+        let s = settings.scale
+        let r = CatView.heldImageRect
+        container.heldHitRect = NSRect(x: r.minX * s,
+                                       y: (CatView.design.height - r.maxY) * s,
+                                       width: r.width * s,
+                                       height: r.height * s)
     }
 
     private func placeInitially() {

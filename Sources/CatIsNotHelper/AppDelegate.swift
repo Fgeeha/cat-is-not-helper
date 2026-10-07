@@ -30,6 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.container.onDoubleClick = { [weak self] in self?.openHeld() }
         panel.container.onDropFiles = { [weak self] urls in self?.give(files: urls) }
         panel.container.menuProvider = { [weak self] in self?.statusBar.makeMenu() ?? NSMenu() }
+        panel.container.heldItemProvider = { [weak self] in
+            guard let self, let url = self.state.heldURL, let image = self.state.heldImage else { return nil }
+            return (url, image)
+        }
+        panel.container.onHeldDragBegan = { [weak self] in
+            self?.state.putAway(message: nil)
+        }
+        panel.container.onHeldDragEnded = { [weak self] url, delivered in
+            guard let self else { return }
+            // Бросили обратно на котика — он уже снова держит, молчим.
+            if self.state.heldURL == url { return }
+            self.state.say(delivered ? "забирай, твоё" : "ладно, отпустил")
+        }
         if settings.catVisible { panel.orderFrontRegardless() }
 
         monitor.onKey = { [weak self] paw in
@@ -139,7 +152,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func give(files urls: [URL]) {
         guard let first = urls.first, let stored = shots.importImage(from: first) else { return }
         state.hold(url: stored)
-        stats.recordScreenshot()
+        // Новый файл — считаем; свой же из папки (например, вернули после перетаскивания) — нет.
+        if stored != first { stats.recordScreenshot() }
     }
 
     /// Картинка из галереи (уже лежит в папке котика).
@@ -175,12 +189,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         show(id: "gallery", title: "Скриншоты котика", size: NSSize(width: 720, height: 520),
              view: GalleryView(shots: shots, state: state,
                                onCapture: { [weak self] in self?.takeScreenshot() },
-                               onGive: { [weak self] url in self?.give(url: url) }))
+                               onGive: { [weak self] url in self?.give(url: url) },
+                               onTakeBack: { [weak self] in self?.putAway() }))
     }
 
     func showSettings() {
-        show(id: "settings", title: "Настройки котика", size: NSSize(width: 440, height: 560),
-             view: SettingsView(settings: settings,
+        show(id: "settings", title: "Настройки котика", size: NSSize(width: 760, height: 640),
+             view: SettingsView(settings: settings, state: state,
                                 isTrusted: { InputMonitor.isTrusted(prompt: false) },
                                 requestAccess: { [weak self] in self?.requestAccess() }))
     }

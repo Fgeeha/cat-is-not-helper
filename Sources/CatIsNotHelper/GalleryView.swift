@@ -5,6 +5,7 @@ struct GalleryView: View {
     @ObservedObject var state: CatState
     let onCapture: () -> Void
     let onGive: (URL) -> Void
+    let onTakeBack: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,7 @@ struct GalleryView: View {
                                 url: url,
                                 isHeld: state.heldURL == url,
                                 give: { onGive(url) },
+                                takeBack: { onTakeBack() },
                                 open: { shots.open(url) },
                                 reveal: { shots.reveal(url) },
                                 delete: {
@@ -59,6 +61,7 @@ struct GalleryCell: View {
     let url: URL
     let isHeld: Bool
     let give: () -> Void
+    let takeBack: () -> Void
     let open: () -> Void
     let reveal: () -> Void
     let delete: () -> Void
@@ -96,9 +99,11 @@ struct GalleryCell: View {
                 .truncationMode(.middle)
 
             HStack {
-                Button(isHeld ? "Уже держит" : "🐾 Дать котику") { give() }
-                    .disabled(isHeld)
-                    .controlSize(.small)
+                if isHeld {
+                    Button("Забрать у котика") { takeBack() }.controlSize(.small)
+                } else {
+                    Button("🐾 Дать котику") { give() }.controlSize(.small)
+                }
                 Spacer()
                 Menu {
                     Button("Открыть") { open() }
