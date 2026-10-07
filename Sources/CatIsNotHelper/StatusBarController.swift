@@ -1,0 +1,78 @@
+import AppKit
+
+/// Иконка 🐾 в меню-баре и общее меню (оно же — контекстное меню котика).
+final class StatusBarController: NSObject, NSMenuDelegate {
+    private let item: NSStatusItem
+    unowned let app: AppDelegate
+
+    init(app: AppDelegate) {
+        self.app = app
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
+        item.button?.title = "🐾"
+        item.button?.toolTip = "Cat Is Not Helper"
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) { fill(menu) }
+
+    func makeMenu() -> NSMenu {
+        let menu = NSMenu()
+        fill(menu)
+        return menu
+    }
+
+    private func fill(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let today = app.stats.today
+        menu.addItem(info("Сегодня: \(today.keys.formatted()) тапов · \(app.stats.cpm)/мин"))
+        menu.addItem(info("Настроение: \(moodEmoji(app.state.mood)) \(moodTitle(app.state.mood)) · \(Int(app.state.happiness * 100))%"))
+        if app.state.needsAccess {
+            menu.addItem(action("⚠️ Дать доступ к клавиатуре…", #selector(requestAccess)))
+        }
+        menu.addItem(.separator())
+        menu.addItem(action("Статистика…", #selector(showStats), key: "s"))
+        menu.addItem(action("Сделать скриншот — котик подержит", #selector(takeScreenshot), key: "4"))
+        menu.addItem(action("Галерея скриншотов…", #selector(showGallery), key: "g"))
+        if app.state.heldURL != nil {
+            menu.addItem(action("Открыть то, что держит котик", #selector(openHeld), key: "o"))
+            menu.addItem(action("Забрать у котика", #selector(putAway)))
+        }
+        menu.addItem(.separator())
+        menu.addItem(action("Погладить", #selector(pet), key: "p"))
+        menu.addItem(action("Покормить 🐟", #selector(feed), key: "f"))
+        menu.addItem(.separator())
+        menu.addItem(action(app.settings.catVisible ? "Спрятать котика" : "Показать котика", #selector(toggleCat), key: "h"))
+        menu.addItem(action("Настройки…", #selector(showSettings), key: ","))
+        menu.addItem(.separator())
+        menu.addItem(action("Выйти", #selector(quit), key: "q"))
+    }
+
+    private func info(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    private func action(_ title: String, _ selector: Selector, key: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: selector, keyEquivalent: key)
+        item.target = self
+        return item
+    }
+
+    // MARK: - Действия
+
+    @objc private func showStats() { app.showStats() }
+    @objc private func showGallery() { app.showGallery() }
+    @objc private func showSettings() { app.showSettings() }
+    @objc private func takeScreenshot() { app.takeScreenshot() }
+    @objc private func openHeld() { app.openHeld() }
+    @objc private func putAway() { app.putAway() }
+    @objc private func pet() { app.pet() }
+    @objc private func feed() { app.feed() }
+    @objc private func toggleCat() { app.toggleCat() }
+    @objc private func requestAccess() { app.requestAccess() }
+    @objc private func quit() { app.quit() }
+}
