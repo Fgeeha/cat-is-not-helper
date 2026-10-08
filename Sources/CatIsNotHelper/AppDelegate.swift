@@ -103,14 +103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func checkUpdatesNow() {
+        state.say("проверяю…", seconds: 2)
         updates.check { [weak self] info in
             guard let self else { return }
             if let info {
-                self.state.say("есть обновление v\(info.version)", seconds: 5)
+                self.state.say("есть v\(info.version) — обновить в меню", seconds: 6)
             } else if case .upToDate = self.updates.status {
                 self.state.say("у меня последняя версия")
+            } else if case .failed(let message) = self.updates.status {
+                self.state.say(message, seconds: 5)
             }
         }
+    }
+
+    func openReleasePage() {
+        let url = updates.available?.pageURL
+            ?? URL(string: "https://github.com/\(UpdateChecker.repo)/releases/latest")!
+        NSWorkspace.shared.open(url)
     }
 
     func installUpdate() {

@@ -35,12 +35,15 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         switch app.updates.status {
         case .available(let version):
             menu.addItem(action("⬆️ Обновить до v\(version)…", #selector(installUpdate)))
+            menu.addItem(action("Открыть v\(version) на GitHub", #selector(openRelease)))
         case .downloading(let progress):
             menu.addItem(info("Скачиваю обновление… \(Int(progress * 100))%"))
         case .installing:
             menu.addItem(info("Устанавливаю обновление…"))
+        case .checking:
+            menu.addItem(info("Проверяю обновления…"))
         default:
-            break
+            menu.addItem(action("Проверить обновления…", #selector(checkUpdates)))
         }
         menu.addItem(.separator())
         menu.addItem(action("Статистика…", #selector(showStats), key: "s"))
@@ -107,6 +110,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func installUpdate() { app.installUpdate() }
+    @objc private func checkUpdates() { app.checkUpdatesNow() }
+    @objc private func openRelease() { app.openReleasePage() }
     @objc private func showStats() { app.showStats() }
     @objc private func showGallery() { app.showGallery() }
     @objc private func showSettings() { app.showSettings() }

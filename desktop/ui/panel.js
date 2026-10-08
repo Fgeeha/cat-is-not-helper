@@ -241,38 +241,39 @@
     $('update-hint').textContent = 'Установлено из пакета (rpm/deb): обновление ставится через пакетный менеджер. Кнопка проверит новую версию и откроет страницу релиза.';
   }
 
-  async function checkUpdate(interactive) {
+  const U = window.CatUpdates;
+  async function checkUpdate() {
     const status = $('update-status');
     status.innerHTML = 'Проверяю…';
     try {
-      const update = await T.updater.check();
-      if (!update) { status.innerHTML = '<span class="ok">У тебя последняя версия</span>'; return; }
-      invoke('set_update_text', { text: `⬆️ Обновить до v${update.version}…` });
-      if (platform === 'linux' && !appimage) {
-        status.innerHTML = `<span class="warn">Доступна версия ${update.version}</span> <button class="primary small" id="btn-release">Открыть релиз</button>`;
-        $('btn-release').addEventListener('click', () => T.opener.openUrl('https://github.com/Fgeeha/cat-is-not-helper/releases/latest'));
+      const result = await U.check();
+      if (result.none) {
+        status.innerHTML = result.noReleases
+          ? '<span class="muted">Релизов пока нет</span>'
+          : '<span class="ok">У тебя последняя версия</span>';
         return;
       }
-      status.innerHTML = `<span class="warn">Доступна версия ${update.version}</span> <button class="primary small" id="btn-install">Обновить</button>`;
+      if (!result.installable) {
+        status.innerHTML = `<span class="warn">Доступна версия ${result.version}</span> <button class="primary small" id="btn-release">Открыть релиз</button>`;
+        $('btn-release').addEventListener('click', () => U.openReleases());
+        return;
+      }
+      status.innerHTML = `<span class="warn">Доступна версия ${result.version}</span> <button class="primary small" id="btn-install">Обновить</button>`;
       $('btn-install').addEventListener('click', async () => {
-        let total = 0, got = 0;
         status.textContent = 'Скачиваю…';
         try {
-          await update.downloadAndInstall((ev) => {
-            if (ev.event === 'Started') total = ev.data.contentLength || 0;
-            if (ev.event === 'Progress') { got += ev.data.chunkLength; if (total) status.textContent = `Скачиваю… ${Math.round((got / total) * 100)}%`; }
-            if (ev.event === 'Finished') status.textContent = 'Устанавливаю и перезапускаюсь…';
-          });
-          await T.process.relaunch();
+          await U.install((p) => { status.textContent = p >= 1 ? 'Устанавливаю и перезапускаюсь…' : `Скачиваю… ${Math.round(p * 100)}%`; });
         } catch (err) {
-          status.innerHTML = `<span class="bad">Не удалось обновиться: ${err}</span>`;
+          status.innerHTML = `<span class="bad">Не удалось обновиться: ${err}</span> <button class="plain small" id="btn-release">Открыть релиз</button>`;
+          $('btn-release').addEventListener('click', () => U.openReleases());
         }
       });
     } catch (err) {
-      status.innerHTML = `<span class="bad">${String(err).includes('Could not fetch') || String(err).includes('404') ? 'Релизов пока нет или нет сети' : err}</span>`;
+      status.innerHTML = `<span class="bad">Не удалось проверить: ${err}</span>`;
     }
   }
-  $('btn-check').addEventListener('click', () => checkUpdate(true));
+  $('btn-check').addEventListener('click', () => checkUpdate());
+  $('btn-github').addEventListener('click', () => U.openReleases());
 
   fillSettings();
   showTab('stats');

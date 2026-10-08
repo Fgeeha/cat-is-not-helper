@@ -126,18 +126,38 @@
 
   // MARK: - Обновления
 
-  async function checkUpdatesQuietly() {
-    if (!settings.checkUpdates) return;
+  const U = window.CatUpdates;
+
+  async function checkUpdates(manual) {
     try {
-      const update = await T.updater.check();
-      if (update) {
-        cat.say(`есть обновление v${update.version} — в меню`, 6);
-        invoke('set_update_text', { text: `⬆️ Обновить до v${update.version}…` });
+      const result = await U.check();
+      if (result.none) {
+        if (manual) cat.say(result.noReleases ? 'релизов пока нет' : 'у меня последняя версия', 3);
+        return;
       }
+      cat.say(result.installable
+        ? `есть v${result.version} — обновить в меню`
+        : `есть v${result.version} — скачать в меню`, 6);
     } catch (err) {
       console.warn('update check failed', err);
+      if (manual) cat.say('не смог проверить: нет сети?', 3);
     }
   }
-  setTimeout(checkUpdatesQuietly, 20000);
-  setInterval(checkUpdatesQuietly, 6 * 60 * 60 * 1000);
+
+  // Пункт меню «Проверить обновления» / «Обновить до vX» / «Скачать vX на GitHub».
+  await listen('update-action', async () => {
+    if (!U.state.available) { await checkUpdates(true); return; }
+    if (!U.state.available.installable) { await U.install(); return; }
+    cat.say(`качаю v${U.state.available.version}…`, 120);
+    try {
+      await U.install((p) => cat.say(`качаю v${U.state.available.version}… ${Math.round(p * 100)}%`, 120));
+    } catch (err) {
+      cat.say('не вышло обновиться, открой релиз', 5);
+      invoke('set_update_text', { text: `⬆️ Скачать v${U.state.available.version} на GitHub` });
+      U.state.available.installable = false;
+    }
+  });
+
+  setTimeout(() => { if (settings.checkUpdates) checkUpdates(false); }, 20000);
+  setInterval(() => { if (settings.checkUpdates) checkUpdates(false); }, 6 * 60 * 60 * 1000);
 })();

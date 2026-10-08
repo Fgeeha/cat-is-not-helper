@@ -1,7 +1,7 @@
 //! Иконка в трее и общее меню (оно же контекстное меню котика).
 
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::{actions, AppState};
 
@@ -87,7 +87,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayMenu> {
         let id = event.id().as_ref();
         match id {
             "access" => actions::request_access(app),
-            "update" => actions::open_panel(app, "settings"),
+            "update" => {
+                // Логика в окне котика: проверить / установить / открыть GitHub.
+                let _ = app.emit("update-action", ());
+            }
             "stats" => actions::open_panel(app, "stats"),
             "shot" => actions::start_capture(app),
             "gallery" => actions::open_panel(app, "gallery"),
