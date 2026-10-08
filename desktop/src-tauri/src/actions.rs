@@ -169,12 +169,7 @@ pub fn apply_settings(app: &AppHandle, settings: &Settings) {
     let _ = app.emit("settings-changed", settings);
     if let Some(cat) = app.get_webview_window("cat") {
         let (w, h) = settings.window_size();
-        // На Linux (GTK) неизменяемое окно игнорирует set_size — на время снимаем запрет.
-        let _ = cat.set_resizable(true);
-        let _ = cat.set_min_size(None::<LogicalSize<f64>>);
-        let _ = cat.set_max_size(None::<LogicalSize<f64>>);
-        let _ = cat.set_size(Size::Logical(LogicalSize::new(w, h)));
-        let _ = cat.set_resizable(false);
+        resize_cat(&cat, w, h);
         let _ = cat.set_always_on_top(settings.always_on_top);
         let _ = cat.set_visible_on_all_workspaces(settings.all_spaces);
         if settings.cat_visible {
@@ -184,6 +179,26 @@ pub fn apply_settings(app: &AppHandle, settings: &Settings) {
         }
     }
     tray::refresh(app);
+}
+
+/// Размер окна котика. Окно остаётся «изменяемым», а фиксируется равными
+/// минимальным и максимальным размерами: GTK у неизменяемого окна игнорирует
+/// set_size и возвращает размер из конфигурации, из-за чего пресеты S и M
+/// выглядели одинаково.
+fn resize_cat(cat: &tauri::WebviewWindow, w: f64, h: f64) {
+    let size = LogicalSize::new(w, h);
+    let _ = cat.set_resizable(true);
+    // Сначала расширяем рамки, иначе новый размер может не пройти старые ограничения.
+    let _ = cat.set_min_size(None::<LogicalSize<f64>>);
+    let _ = cat.set_max_size(None::<LogicalSize<f64>>);
+    let _ = cat.set_size(Size::Logical(size));
+    let _ = cat.set_min_size(Some(size));
+    let _ = cat.set_max_size(Some(size));
+    #[cfg(debug_assertions)]
+    if let Ok(actual) = cat.inner_size() {
+        let sf = cat.scale_factor().unwrap_or(1.0);
+        eprintln!("cat window: запрошено {w}×{h}, фактически {}×{}", actual.width as f64 / sf, actual.height as f64 / sf);
+    }
 }
 
 pub fn toggle_cat(app: &AppHandle) {
@@ -200,7 +215,7 @@ pub fn place_cat(app: &AppHandle) {
     let Some(cat) = app.get_webview_window("cat") else { return };
     let settings = app.state::<AppState>().settings.lock().clone();
     let (w, h) = settings.window_size();
-    let _ = cat.set_size(Size::Logical(LogicalSize::new(w, h)));
+    resize_cat(&cat, w, h);
 
     if let Some((x, y)) = settings.position {
         let _ = cat.set_position(Position::Physical(PhysicalPosition::new(x, y)));

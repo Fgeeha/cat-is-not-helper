@@ -21,7 +21,7 @@
         "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "resizable": false,
+        "resizable": true,
         "maximizable": false,
         "minimizable": false,
         "visibleOnAllWorkspaces": true,
