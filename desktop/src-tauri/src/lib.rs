@@ -1,6 +1,8 @@
 //! Cat Is Not Helper — кросс-платформенный котик на Tauri.
 
 mod actions;
+#[cfg(target_os = "linux")]
+mod clipboard_x11;
 mod input;
 mod paths;
 mod settings;
@@ -24,7 +26,8 @@ use stats::{Snapshot, StatsStore};
 pub struct AppState {
     pub stats: Mutex<StatsStore>,
     pub settings: Mutex<Settings>,
-    pub held: Mutex<Option<PathBuf>>,
+    /// Стопка того, что держит котик; последний элемент — сверху, его видно.
+    pub held: Mutex<Vec<PathBuf>>,
     pub tray: Mutex<Option<tray::TrayMenu>>,
     pub last_position_save: Mutex<Instant>,
     /// Держим буфер обмена живым: на X11 содержимое пропадает, если владелец закрыт.
@@ -94,7 +97,7 @@ fn thumbnail(path: String, max: u32) -> Option<String> {
 
 #[tauri::command]
 fn import_files(app: AppHandle, paths: Vec<String>) -> bool {
-    paths.first().map(|p| actions::give(&app, std::path::Path::new(p))).unwrap_or(false)
+    actions::give_many(&app, &paths.iter().map(PathBuf::from).collect::<Vec<_>>())
 }
 
 #[tauri::command]
@@ -102,9 +105,15 @@ fn give_shot(app: AppHandle, path: String) {
     actions::hold(&app, PathBuf::from(path), true);
 }
 
+/// Забрать верхний файл (или конкретный, если указан путь).
 #[tauri::command]
-fn put_away(app: AppHandle, message: Option<String>) {
-    actions::put_away(&app, message.as_deref());
+fn put_away(app: AppHandle, message: Option<String>, path: Option<String>) {
+    actions::put_away(&app, message.as_deref(), path.map(PathBuf::from).as_deref());
+}
+
+#[tauri::command]
+fn put_away_all(app: AppHandle) {
+    actions::put_away_all(&app, Some("ладно, забирай всё"));
 }
 
 #[tauri::command]
@@ -125,9 +134,9 @@ fn copy_held(app: AppHandle) {
 #[tauri::command]
 fn delete_shot(app: AppHandle, path: String) -> bool {
     let target = PathBuf::from(&path);
-    let is_held = app.state::<AppState>().held.lock().as_ref() == Some(&target);
+    let is_held = app.state::<AppState>().held.lock().contains(&target);
     if is_held {
-        actions::put_away(&app, None);
+        actions::put_away(&app, None, Some(&target));
     }
     shots::delete(&target)
 }
@@ -254,7 +263,7 @@ pub fn run() {
         .manage(AppState {
             stats: Mutex::new(StatsStore::load()),
             settings: Mutex::new(Settings::load()),
-            held: Mutex::new(None),
+            held: Mutex::new(Vec::new()),
             tray: Mutex::new(None),
             last_position_save: Mutex::new(Instant::now()),
             clipboard: Mutex::new(None),
@@ -326,6 +335,7 @@ pub fn run() {
             import_files,
             give_shot,
             put_away,
+            put_away_all,
             get_held,
             open_held,
             copy_held,

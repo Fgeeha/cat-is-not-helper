@@ -16,6 +16,7 @@ pub struct TrayMenu {
     pub update: MenuItem<Wry>,
     pub open_held: MenuItem<Wry>,
     pub put_away: MenuItem<Wry>,
+    pub put_away_all: MenuItem<Wry>,
     pub copy_held: MenuItem<Wry>,
     pub toggle_cat: MenuItem<Wry>,
     pub sizes: Vec<CheckMenuItem<Wry>>,
@@ -29,6 +30,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let update = MenuItem::with_id(app, "update", "Проверить обновления", true, None::<&str>)?;
     let open_held = MenuItem::with_id(app, "open-held", "Открыть то, что держит котик", false, None::<&str>)?;
     let put_away = MenuItem::with_id(app, "put-away", "Забрать у котика", false, None::<&str>)?;
+    let put_away_all = MenuItem::with_id(app, "put-away-all", "Забрать всё", false, None::<&str>)?;
     let copy_held = MenuItem::with_id(app, "copy-held", "Скопировать в буфер обмена", false, None::<&str>)?;
     let toggle_cat = MenuItem::with_id(app, "toggle-cat", "Спрятать котика", true, None::<&str>)?;
 
@@ -69,6 +71,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayMenu> {
             &open_held,
             &copy_held,
             &put_away,
+            &put_away_all,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "pet", "Погладить", true, None::<&str>)?,
             &MenuItem::with_id(app, "feed", "Покормить 🐟", true, None::<&str>)?,
@@ -99,7 +102,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayMenu> {
             "gallery" => actions::open_panel(app, "gallery"),
             "open-held" => actions::open_held(app),
             "copy-held" => actions::copy_held(app),
-            "put-away" => actions::put_away(app, Some("ладно, забирай")),
+            "put-away" => actions::put_away(app, Some("ладно, забирай"), None),
+            "put-away-all" => actions::put_away_all(app, Some("ладно, забирай всё")),
             "pet" => actions::pet(app),
             "feed" => actions::feed(app),
             "toggle-cat" => actions::toggle_cat(app),
@@ -117,7 +121,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<TrayMenu> {
         }
     });
 
-    Ok(TrayMenu { menu, header, mood, access, update, open_held, put_away, copy_held, toggle_cat, sizes, furs })
+    Ok(TrayMenu { menu, header, mood, access, update, open_held, put_away, put_away_all, copy_held, toggle_cat, sizes, furs })
 }
 
 /// Обновить динамические пункты: заголовок, доступ, что держит, размер и окрас.
@@ -147,10 +151,12 @@ fn refresh_now(app: &AppHandle) {
         "✓ Клавиатуру вижу"
     });
 
-    let held = state.held.lock().is_some();
-    let _ = tray.open_held.set_enabled(held);
-    let _ = tray.put_away.set_enabled(held);
-    let _ = tray.copy_held.set_enabled(held);
+    let count = state.held.lock().len();
+    let _ = tray.open_held.set_enabled(count > 0);
+    let _ = tray.put_away.set_enabled(count > 0);
+    let _ = tray.put_away.set_text(if count > 1 { format!("Забрать у котика верхний (из {count})") } else { "Забрать у котика".to_string() });
+    let _ = tray.put_away_all.set_enabled(count > 1);
+    let _ = tray.copy_held.set_enabled(count > 0);
 
     let settings = state.settings.lock().clone();
     let _ = tray

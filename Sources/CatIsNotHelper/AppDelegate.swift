@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.container.onHeldDragEnded = { [weak self] url, delivered in
             guard let self else { return }
             // Бросили обратно на котика — он уже снова держит, молчим.
-            if self.state.heldURL == url { return }
+            if self.state.heldStack.contains(url) { return }
             self.state.say(delivered ? "забирай, твоё" : "ладно, отпустил")
         }
         if settings.catVisible { panel.orderFrontRegardless() }
@@ -206,17 +206,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Картинки, брошенные на котика.
+    /// Файлы, брошенные на котика: все попадают в стопку, сверху последний.
     func give(files urls: [URL]) {
-        guard let first = urls.first, let stored = shots.importImage(from: first) else { return }
-        state.hold(url: stored)
-        // Новый файл — считаем; свой же из папки (например, вернули после перетаскивания) — нет.
-        if stored != first { stats.recordScreenshot() }
+        var stored: [URL] = []
+        for url in urls {
+            guard let copy = shots.importImage(from: url) else { continue }
+            // Новый файл — считаем; свой же из папки (например, вернули после перетаскивания) — нет.
+            if copy != url { stats.recordScreenshot() }
+            stored.append(copy)
+        }
+        guard !stored.isEmpty else {
+            state.say("это я взять не могу 🤔")
+            return
+        }
+        state.hold(urls: stored)
     }
 
-    /// Картинка из галереи (уже лежит в папке котика).
+    /// Файл из галереи (уже лежит в папке котика).
     func give(url: URL) {
         state.hold(url: url)
+    }
+
+    func putAwayAll() {
+        state.putAwayAll()
     }
 
     func openHeld() {
@@ -261,7 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              view: GalleryView(shots: shots, state: state,
                                onCapture: { [weak self] in self?.takeScreenshot() },
                                onGive: { [weak self] url in self?.give(url: url) },
-                               onTakeBack: { [weak self] in self?.putAway() }))
+                               onTakeBack: { [weak self] in self?.putAwayAll() }))
     }
 
     func showSettings() {

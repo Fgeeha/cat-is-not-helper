@@ -26,7 +26,7 @@
   let settings = await invoke('get_settings');
   let held = await invoke('get_held');
   preview.applySettings(settings);
-  const showHeld = (h) => { if (h.path) preview.hold(h.thumb, { name: h.name }); else preview.putAway(); };
+  const showHeld = (h) => { if (h.top) preview.hold(h.top.thumb, { name: h.top.name, count: h.count }); else preview.putAway(); };
   showHeld(held);
 
   await listen('tap', (e) => preview.tap(e.payload.paw));
@@ -97,7 +97,9 @@
     $('happy-bar').style.width = `${Math.max(3, hp)}%`;
     $('happy-text').textContent = `Счастье: ${hp}%`;
     $('cat-counts').innerHTML = `Погладили: ${fmt(s.pets)}<br>Покормили: ${fmt(s.feeds)}<br>Скриншотов дали: ${fmt(s.screenshots)}`;
-    $('held-line').textContent = held.path ? `Сейчас держит: ${held.path.split(/[\\/]/).pop()}` : 'Сейчас лапки свободны — дай ему скриншот.';
+    $('held-line').textContent = held.top
+      ? (held.count > 1 ? `Сейчас держит ${held.count} файлов, сверху: ${held.top.name}` : `Сейчас держит: ${held.top.name}`)
+      : 'Сейчас лапки свободны — дай ему скриншот или любой файл.';
   }
 
   // MARK: - Галерея
@@ -110,7 +112,8 @@
 
   async function refreshGallery() {
     const items = await invoke('list_shots');
-    $('shots-count').textContent = `${items.length} шт.`;
+    $('shots-count').textContent = held.count > 0 ? `${items.length} шт. · у котика ${held.count}` : `${items.length} шт.`;
+    $('btn-take-all').style.display = held.count > 0 ? '' : 'none';
     const root = $('gallery');
     if (!items.length) {
       root.innerHTML = `<div class="empty"><div class="big">🐾</div><b>Пока пусто</b><br>Нажми «Сделать скриншот» или перетащи любой файл прямо на котика — он подержит.</div>`;
@@ -119,7 +122,7 @@
     root.innerHTML = '<div class="grid"></div>';
     const grid = root.firstElementChild;
     for (const item of items) {
-      const isHeld = held.path === item.path;
+      const isHeld = (held.paths || []).includes(item.path);
       const cell = document.createElement('div');
       cell.className = `cell${isHeld ? ' held' : ''}`;
       const ext = (item.name.includes('.') ? item.name.split('.').pop() : '').toUpperCase().slice(0, 5) || 'ФАЙЛ';
@@ -135,7 +138,7 @@
           <button class="plain small act-delete" title="Удалить">🗑</button>
         </div>`;
       cell.querySelector('.act-give').addEventListener('click', () =>
-        isHeld ? invoke('put_away', { message: 'ладно, забирай' }) : invoke('give_shot', { path: item.path }));
+        isHeld ? invoke('put_away', { message: 'ладно, забирай', path: item.path }) : invoke('give_shot', { path: item.path }));
       cell.querySelector('.act-open').addEventListener('click', () => invoke('open_shot', { path: item.path }));
       cell.querySelector('.act-reveal').addEventListener('click', () => invoke('reveal_shot', { path: item.path }));
       cell.querySelector('.act-delete').addEventListener('click', async () => {
@@ -159,6 +162,7 @@
   }
   $('btn-capture').addEventListener('click', () => invoke('start_capture'));
   $('btn-folder').addEventListener('click', () => invoke('open_shots_folder'));
+  $('btn-take-all').addEventListener('click', () => invoke('put_away_all'));
 
   // MARK: - Настройки
 

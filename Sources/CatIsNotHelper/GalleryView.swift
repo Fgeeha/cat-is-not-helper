@@ -13,8 +13,12 @@ struct GalleryView: View {
                 Button { onCapture() } label: { Label("Сделать скриншот", systemImage: "camera") }
                     .keyboardShortcut("4", modifiers: [.command, .shift])
                 Button { shots.openFolder() } label: { Label("Открыть папку", systemImage: "folder") }
+                if !state.heldStack.isEmpty {
+                    Button("Забрать всё у котика") { onTakeBack() }
+                }
                 Spacer()
-                Text("\(shots.items.count) шт.").foregroundColor(.secondary)
+                Text(state.heldStack.isEmpty ? "\(shots.items.count) шт." : "\(shots.items.count) шт. · у котика \(state.heldStack.count)")
+                    .foregroundColor(.secondary)
             }
             .padding()
 
@@ -36,13 +40,13 @@ struct GalleryView: View {
                         ForEach(shots.items, id: \.self) { url in
                             GalleryCell(
                                 url: url,
-                                isHeld: state.heldURL == url,
+                                isHeld: state.heldStack.contains(url),
                                 give: { onGive(url) },
-                                takeBack: { onTakeBack() },
+                                takeBack: { state.putAway(message: "ладно, забирай", url: url) },
                                 open: { shots.open(url) },
                                 reveal: { shots.reveal(url) },
                                 delete: {
-                                    if state.heldURL == url { state.putAway() }
+                                    if state.heldStack.contains(url) { state.putAway(message: nil, url: url) }
                                     shots.delete(url)
                                 }
                             )

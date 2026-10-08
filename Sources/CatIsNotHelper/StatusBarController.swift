@@ -52,7 +52,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         if app.state.heldURL != nil {
             menu.addItem(action("Открыть то, что держит котик", #selector(openHeld), key: "o"))
             menu.addItem(action("Скопировать в буфер обмена", #selector(copyHeld), key: "c"))
-            menu.addItem(action("Забрать у котика", #selector(putAway)))
+            let count = app.state.heldStack.count
+            menu.addItem(action(count > 1 ? "Забрать у котика верхний (из \(count))" : "Забрать у котика", #selector(putAway)))
+            if count > 1 {
+                menu.addItem(action("Забрать всё", #selector(putAwayAll)))
+            }
         }
         menu.addItem(.separator())
         menu.addItem(action("Погладить", #selector(pet), key: "p"))
@@ -119,6 +123,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     @objc private func takeScreenshot() { app.takeScreenshot() }
     @objc private func openHeld() { app.openHeld() }
     @objc private func putAway() { app.putAway() }
+    @objc private func putAwayAll() { app.putAwayAll() }
     @objc private func copyHeld() { app.copyHeld() }
     @objc private func pet() { app.pet() }
     @objc private func feed() { app.feed() }

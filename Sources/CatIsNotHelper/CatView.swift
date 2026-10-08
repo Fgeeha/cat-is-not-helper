@@ -175,6 +175,18 @@ struct CatView: View {
                 .rotationEffect(.degrees(-3))
                 .position(x: 130, y: 164)
                 .transition(.scale(scale: 0.4).combined(with: .opacity))
+            if state.heldStack.count > 1 {
+                ZStack {
+                    Circle().fill(Color(red: 0.93, green: 0.55, blue: 0.2))
+                    Circle().stroke(Color.white, lineWidth: 2)
+                    Text(state.heldStack.count > 99 ? "99+" : "\(state.heldStack.count)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 18, height: 18)
+                .position(x: 182, y: 128)
+                .transition(.scale.combined(with: .opacity))
+            }
         }
     }
 

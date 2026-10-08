@@ -11,17 +11,29 @@ use crate::{input, shots, tray, AppState, SayPayload};
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct HeldPayload {
-    pub path: Option<String>,
-    pub name: Option<String>,
+pub struct HeldItem {
+    pub path: String,
+    pub name: String,
     pub is_image: bool,
     /// Миниатюра для картинок; для документов None, интерфейс рисует карточку.
     pub thumb: Option<String>,
 }
 
-impl HeldPayload {
-    fn empty() -> Self {
-        HeldPayload { path: None, name: None, is_image: false, thumb: None }
+/// Что держит котик: верхний элемент стопки (его видно) и все пути.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct HeldPayload {
+    pub top: Option<HeldItem>,
+    pub paths: Vec<String>,
+    pub count: usize,
+}
+
+fn held_item(path: &Path, with_thumb: bool) -> HeldItem {
+    HeldItem {
+        thumb: if with_thumb { shots::thumbnail_data_url(path, 480) } else { None },
+        is_image: shots::is_image(path),
+        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        path: path.to_string_lossy().into_owned(),
     }
 }
 
@@ -64,71 +76,118 @@ pub fn request_access(app: &AppHandle) {
 
 pub fn held_payload(app: &AppHandle) -> HeldPayload {
     let held = app.state::<AppState>().held.lock().clone();
-    match held {
-        Some(path) => HeldPayload {
-            thumb: shots::thumbnail_data_url(&path, 480),
-            is_image: shots::is_image(&path),
-            name: path.file_name().map(|n| n.to_string_lossy().into_owned()),
-            path: Some(path.to_string_lossy().into_owned()),
-        },
-        None => HeldPayload::empty(),
+    HeldPayload {
+        top: held.last().map(|p| held_item(p, true)),
+        paths: held.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+        count: held.len(),
     }
 }
 
-/// Положить то, что держит котик, в буфер обмена: картинку как изображение,
-/// любой файл — как путь текстом. Нужно там, где перетаскивание наружу не работает.
-pub fn copy_held(app: &AppHandle) {
-    let held = app.state::<AppState>().held.lock().clone();
-    let Some(path) = held else { return };
-    let state = app.state::<AppState>();
-    let mut guard = state.clipboard.lock();
-    if guard.is_none() {
-        *guard = arboard::Clipboard::new().ok();
-    }
-    let Some(clipboard) = guard.as_mut() else {
-        say(app, "буфер обмена недоступен", 3.0);
-        return;
-    };
-    let as_image = if shots::is_image(&path) {
-        image::open(&path).ok().map(|img| img.to_rgba8())
-    } else {
-        None
-    };
-    let result = match as_image {
-        Some(rgba) => clipboard.set_image(arboard::ImageData {
-            width: rgba.width() as usize,
-            height: rgba.height() as usize,
-            bytes: std::borrow::Cow::Owned(rgba.into_raw()),
-        }),
-        None => clipboard.set_text(path.to_string_lossy().into_owned()),
-    };
-    match result {
-        Ok(()) => say(app, "в буфере обмена, вставляй", 3.0),
-        Err(err) => say(app, format!("не вышло скопировать: {err}"), 4.0),
-    }
-}
-
-pub fn hold(app: &AppHandle, path: PathBuf, announce: bool) {
-    *app.state::<AppState>().held.lock() = Some(path);
+fn announce_held(app: &AppHandle) {
     let _ = app.emit("held-changed", held_payload(app));
-    if announce {
-        say(app, ["держу!", "о, что-то новое", "не потеряю", "моя прелесть"][fastrand(4)], 2.6);
-    }
     tray::refresh(app);
 }
 
-pub fn put_away(app: &AppHandle, message: Option<&str>) {
-    *app.state::<AppState>().held.lock() = None;
-    let _ = app.emit("held-changed", HeldPayload::empty());
+/// Положить то, что держит котик, в буфер обмена. На X11 — всё сразу: список
+/// файлов для файловых менеджеров, PNG верхней картинки для чатов, пути текстом.
+/// На macOS и Windows — верхний файл: картинка как изображение, документ как путь.
+pub fn copy_held(app: &AppHandle) {
+    let held = app.state::<AppState>().held.lock().clone();
+    let Some(top) = held.last().cloned() else { return };
+
+    #[cfg(target_os = "linux")]
+    {
+        let png = if shots::is_image(&top) {
+            image::open(&top).ok().and_then(|img| {
+                let mut buf = std::io::Cursor::new(Vec::new());
+                img.write_to(&mut buf, image::ImageFormat::Png).ok().map(|_| buf.into_inner())
+            })
+        } else {
+            None
+        };
+        let paths = held.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        match crate::clipboard_x11::set(crate::clipboard_x11::Content { paths, png }) {
+            Ok(()) => say(app, if held.len() > 1 { "все файлы в буфере, вставляй" } else { "в буфере обмена, вставляй" }, 3.0),
+            Err(err) => say(app, format!("не вышло скопировать: {err}"), 4.0),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let state = app.state::<AppState>();
+        let mut guard = state.clipboard.lock();
+        if guard.is_none() {
+            *guard = arboard::Clipboard::new().ok();
+        }
+        let Some(clipboard) = guard.as_mut() else {
+            say(app, "буфер обмена недоступен", 3.0);
+            return;
+        };
+        let as_image = if shots::is_image(&top) { image::open(&top).ok().map(|img| img.to_rgba8()) } else { None };
+        let result = match as_image {
+            Some(rgba) => clipboard.set_image(arboard::ImageData {
+                width: rgba.width() as usize,
+                height: rgba.height() as usize,
+                bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+            }),
+            None => clipboard.set_text(top.to_string_lossy().into_owned()),
+        };
+        match result {
+            Ok(()) => say(app, "в буфере обмена, вставляй", 3.0),
+            Err(err) => say(app, format!("не вышло скопировать: {err}"), 4.0),
+        }
+    }
+}
+
+/// Дать котику файл: кладётся наверх стопки; если уже держит — поднимается наверх.
+pub fn hold(app: &AppHandle, path: PathBuf, announce: bool) {
+    let count = {
+        let state = app.state::<AppState>();
+        let mut held = state.held.lock();
+        held.retain(|p| p != &path);
+        held.push(path);
+        held.len()
+    };
+    announce_held(app);
+    if announce {
+        let text = if count > 1 {
+            format!("держу, уже {count}!")
+        } else {
+            ["держу!", "о, что-то новое", "не потеряю", "моя прелесть"][fastrand(4)].to_string()
+        };
+        say(app, text, 2.6);
+    }
+}
+
+/// Забрать у котика: верхний файл, либо конкретный по пути.
+pub fn put_away(app: &AppHandle, message: Option<&str>, path: Option<&Path>) {
+    {
+        let state = app.state::<AppState>();
+        let mut held = state.held.lock();
+        match path {
+            Some(p) => held.retain(|h| h != p),
+            None => {
+                held.pop();
+            }
+        }
+    }
+    announce_held(app);
     if let Some(text) = message {
         say(app, text, 2.6);
     }
-    tray::refresh(app);
+}
+
+pub fn put_away_all(app: &AppHandle, message: Option<&str>) {
+    app.state::<AppState>().held.lock().clear();
+    announce_held(app);
+    if let Some(text) = message {
+        say(app, text, 2.6);
+    }
 }
 
 pub fn open_held(app: &AppHandle) {
-    let held = app.state::<AppState>().held.lock().clone();
-    match held {
+    let top = app.state::<AppState>().held.lock().last().cloned();
+    match top {
         Some(path) => {
             let _ = tauri_plugin_opener::open_path(path.to_string_lossy().into_owned(), None::<&str>);
         }
@@ -136,16 +195,36 @@ pub fn open_held(app: &AppHandle) {
     }
 }
 
-/// Файлы, брошенные на котика или выбранные в галерее: картинки и любые документы.
-pub fn give(app: &AppHandle, source: &Path) -> bool {
-    let Some(stored) = shots::import(source) else {
+/// Несколько файлов разом: все попадают в стопку, сверху — последний.
+pub fn give_many(app: &AppHandle, sources: &[PathBuf]) -> bool {
+    let mut added = 0usize;
+    for source in sources {
+        let Some(stored) = shots::import(source) else { continue };
+        if &stored != source {
+            app.state::<AppState>().stats.lock().record_screenshot();
+        }
+        {
+            let state = app.state::<AppState>();
+            let mut held = state.held.lock();
+            held.retain(|p| p != &stored);
+            held.push(stored);
+        }
+        added += 1;
+    }
+    announce_held(app);
+    if added == 0 {
         say(app, "это я взять не могу 🤔", 2.6);
         return false;
-    };
-    if stored != source {
-        app.state::<AppState>().stats.lock().record_screenshot();
     }
-    hold(app, stored, true);
+    let count = app.state::<AppState>().held.lock().len();
+    let text = if added > 1 {
+        format!("держу все {added}, всего {count}")
+    } else if count > 1 {
+        format!("держу, уже {count}!")
+    } else {
+        "держу!".to_string()
+    };
+    say(app, text, 2.6);
     true
 }
 

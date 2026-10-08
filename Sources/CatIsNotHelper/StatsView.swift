@@ -81,7 +81,10 @@ struct StatsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     if let held = state.heldURL {
-                        Text("Сейчас держит: \(held.lastPathComponent)").font(.caption).foregroundColor(.secondary)
+                        Text(state.heldStack.count > 1
+                             ? "Сейчас держит \(state.heldStack.count) файлов, сверху: \(held.lastPathComponent)"
+                             : "Сейчас держит: \(held.lastPathComponent)")
+                            .font(.caption).foregroundColor(.secondary)
                     } else {
                         Text("Сейчас лапки свободны — дай ему скриншот.").font(.caption).foregroundColor(.secondary)
                     }

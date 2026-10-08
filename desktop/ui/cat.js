@@ -26,7 +26,7 @@
   const isLinux = platformInfo.os === 'linux';
 
   function showHeld(h) {
-    if (h.path) cat.hold(h.thumb, { name: h.name }); else cat.putAway();
+    if (h.top) cat.hold(h.top.thumb, { name: h.top.name, count: h.count }); else cat.putAway();
   }
 
   cat.applySettings(settings);
@@ -76,7 +76,7 @@
     if (!down || dragging) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 3) return;
     dragging = true;
-    if (down.onHeld && held.path) {
+    if (down.onHeld && held.top) {
       await dragHeldOut();
     } else {
       await win.startDragging();
@@ -107,18 +107,18 @@
   // Забрать: тянем из лапок наружу как файл. На Linux перетаскивание из окна
   // в другие приложения ненадёжно, поэтому там же кладём в буфер обмена.
   async function dragHeldOut() {
-    const path = held.path;
-    const icon = held.thumb;
+    const path = held.top.path;
+    const icon = held.top.thumb;
     down = null;
     if (isLinux) {
-      await invoke('copy_held'); // скажет «в буфере обмена, вставляй»
+      await invoke('copy_held'); // X11: список файлов + PNG + путь, скажет «в буфере»
     }
     try {
-      await invoke('put_away', { message: null });
+      await invoke('put_away', { message: null, path });
       await T.drag.startDrag({ item: [path], icon: icon || path }, (event) => {
         const result = (event && (event.result || event.payload?.result)) || '';
         setTimeout(() => {
-          if (held.path === path) return; // вернули котику
+          if (held.paths.includes(path)) return; // вернули котику
           if (isLinux) return; // сообщение про буфер уже показано
           cat.say(String(result).toLowerCase() === 'dropped' ? 'забирай, твоё' : 'ладно, отпустил');
         }, 100);
@@ -126,8 +126,8 @@
     } catch (err) {
       console.error('drag out failed', err);
       if (!isLinux) {
+        await invoke('give_shot', { path }); // вернуть в стопку
         await invoke('copy_held');
-        await invoke('put_away', { message: null });
       }
     }
   }

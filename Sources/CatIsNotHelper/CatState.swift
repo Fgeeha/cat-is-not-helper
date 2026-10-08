@@ -41,8 +41,11 @@ final class CatState: ObservableObject {
     @Published var mood: Mood = .normal
     @Published var blinking = false
     @Published var bubble: String?
+    /// Верхний файл стопки — его видно в лапках.
     @Published var heldImage: NSImage?
     @Published var heldURL: URL?
+    /// Вся стопка, последний элемент сверху.
+    @Published var heldStack: [URL] = []
     @Published var eating = false
     @Published var hearts: [Heart] = []
     @Published var needsAccess = false
@@ -117,26 +120,63 @@ final class CatState: ObservableObject {
         }
     }
 
-    func hold(url: URL) {
+    /// Дать котику файл: кладётся наверх стопки; если уже держит — поднимается наверх.
+    func hold(url: URL, announce: Bool = true) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             say("этого файла уже нет 🤔")
             return
         }
-        let image = FileKind.preview(for: url, maxPixel: 480)
         lastActivity = Date()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
-            heldImage = image
-            heldURL = url
+        heldStack.removeAll { $0 == url }
+        heldStack.append(url)
+        showTop(animated: true)
+        if announce {
+            say(heldStack.count > 1 ? "держу, уже \(heldStack.count)!" : ["держу!", "о, что-то новое", "не потеряю", "моя прелесть"].randomElement()!)
         }
-        say(["держу!", "о, что-то новое", "не потеряю", "моя прелесть"].randomElement()!)
     }
 
-    func putAway(message: String? = "ладно, забирай") {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            heldImage = nil
-            heldURL = nil
+    /// Несколько файлов разом.
+    func hold(urls: [URL]) {
+        let existing = urls.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !existing.isEmpty else { return }
+        for url in existing {
+            heldStack.removeAll { $0 == url }
+            heldStack.append(url)
         }
+        lastActivity = Date()
+        showTop(animated: true)
+        say(existing.count > 1 ? "держу все \(existing.count), всего \(heldStack.count)" : (heldStack.count > 1 ? "держу, уже \(heldStack.count)!" : "держу!"))
+    }
+
+    /// Забрать верхний файл, либо конкретный.
+    func putAway(message: String? = "ладно, забирай", url: URL? = nil) {
+        if let url {
+            heldStack.removeAll { $0 == url }
+        } else {
+            _ = heldStack.popLast()
+        }
+        showTop(animated: true)
         if let message { say(message) }
+    }
+
+    func putAwayAll(message: String? = "ладно, забирай всё") {
+        heldStack.removeAll()
+        showTop(animated: true)
+        if let message { say(message) }
+    }
+
+    private func showTop(animated: Bool) {
+        let top = heldStack.last
+        let image = top.map { FileKind.preview(for: $0, maxPixel: 480) }
+        let update = {
+            self.heldURL = top
+            self.heldImage = image
+        }
+        if animated {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6), update)
+        } else {
+            update()
+        }
     }
 
     func say(_ text: String, seconds: Double = 2.6) {

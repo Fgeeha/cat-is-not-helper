@@ -206,7 +206,11 @@
       n.heldExt = el('text', { x: 0, y: 8, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#ED8C33', 'font-family': 'system-ui, sans-serif' });
       n.heldName = el('text', { x: 0, y: 30, 'text-anchor': 'middle', 'font-size': 7, fill: '#555', 'font-family': 'system-ui, sans-serif' });
       n.heldDoc.append(n.heldExt, n.heldName);
-      n.held.append(n.heldFrame, n.heldImg, n.heldDoc);
+      // Бейдж «+N», когда котик держит несколько файлов.
+      n.heldBadge = el('g', { transform: 'translate(50,-34)' });
+      n.heldBadgeText = el('text', { x: 0, y: 3.5, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 700, fill: '#FFFFFF', 'font-family': 'system-ui, sans-serif' });
+      n.heldBadge.append(el('circle', { r: 9, fill: '#ED8C33', stroke: '#FFFFFF', 'stroke-width': 2 }), n.heldBadgeText);
+      n.held.append(n.heldFrame, n.heldImg, n.heldDoc, n.heldBadge);
       body.appendChild(n.held);
 
       // Лапки
@@ -341,9 +345,13 @@
     }
 
     /// dataUrl — миниатюра картинки; для документа null и имя файла в meta.name.
+    /// meta.count — сколько всего файлов в стопке (бейдж при >1).
     hold(dataUrl, meta = {}) {
       this.state.held = dataUrl || meta.name || 'doc';
       this.state.lastActivity = Date.now();
+      const count = meta.count || 1;
+      this.n.heldBadge.style.display = count > 1 ? '' : 'none';
+      this.n.heldBadgeText.textContent = count > 99 ? '99+' : String(count);
       if (dataUrl) {
         this.n.heldImg.setAttribute('href', dataUrl);
         this.n.heldImg.style.display = '';
