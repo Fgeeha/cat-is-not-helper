@@ -29,6 +29,8 @@ chrono = "0.4"
 dirs = "6"
 trash = "5"
 parking_lot = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3"
 
 # Захват экрана: на macOS и Windows — xcap; на Linux — напрямую X11 (xcap тянет pipewire,
 # которого на старых дистрибутивах нет, а Wayland нам всё равно не подходит из-за rdev).

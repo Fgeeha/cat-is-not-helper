@@ -145,7 +145,8 @@ jobs:
             - RedOS и другие RPM-дистрибутивы: `.rpm` — `sudo dnf install ./CatIsNotHelper-*.rpm`. Нужна сессия X11 для чтения нажатий.
             - Debian/Ubuntu: `.deb`. Любой Linux: `.AppImage` (умеет обновляться сам).
 
-            Приложение само предложит обновиться до этой версии.
+            Приложение само предложит обновиться до этой версии: пункт «Проверить обновления» в меню котика.
+            Обновление ставится автоматически на всех вариантах, включая rpm и deb (через пакетный менеджер).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: ${{ startsWith(github.ref, 'refs/tags/v') && steps.sign.outputs.updater == 'true' }}

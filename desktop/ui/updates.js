@@ -1,14 +1,14 @@
-// Проверка обновлений, общая для окна котика и панели.
-// Сначала штатный апдейтер Tauri (latest.json в релизе); если его нет или
-// платформа не умеет самообновляться (rpm/deb) — сверяем версию через GitHub API
-// и открываем страницу релиза.
+// Проверка и установка обновлений, общая для окна котика и панели.
+// Основной путь — подписанный апдейтер Tauri (latest.json в релизе).
+// Запасной — GitHub API: берём файл релиза, подходящий этой установке
+// (dmg-архив, установщик exe, AppImage, rpm или deb), и ставим его через Rust.
 (function () {
   const T = window.__TAURI__;
   const { invoke } = T.core;
   const REPO = 'Fgeeha/cat-is-not-helper';
   const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
 
-  const state = { available: null, checking: false, platform: null, appimage: false, version: null };
+  const state = { available: null, checking: false, installing: false, info: null, version: null };
 
   function isNewer(candidate, current) {
     const parts = (s) => String(s).replace(/^v/, '').split(/[.+-]/).slice(0, 3).map((p) => parseInt(p, 10) || 0);
@@ -19,20 +19,18 @@
 
   async function init() {
     if (state.version) return;
-    state.platform = await invoke('platform');
-    state.appimage = state.platform === 'linux' ? await invoke('is_appimage') : false;
+    state.info = await invoke('platform_info');
     state.version = await invoke('app_version');
-  }
-
-  function canSelfUpdate() {
-    return !(state.platform === 'linux' && !state.appimage);
   }
 
   async function viaTauri() {
     try {
       const update = await T.updater.check();
       if (!update) return { none: true };
-      return { version: update.version, update, installable: canSelfUpdate(), url: RELEASES_URL };
+      // Tauri не умеет ставить rpm/deb — для них идём через GitHub.
+      const pkg = state.info.package;
+      if (pkg) return null;
+      return { version: update.version, update, installable: true, url: RELEASES_URL, source: 'tauri' };
     } catch (err) {
       console.warn('updater.check:', err);
       return null; // нет latest.json или сети — пробуем GitHub API
@@ -48,7 +46,16 @@
     const json = await res.json();
     const version = String(json.tag_name || '').replace(/^v/, '');
     if (!version || !isNewer(version, state.version)) return { none: true };
-    return { version, update: null, installable: false, url: json.html_url || RELEASES_URL };
+    const suffix = state.info.assetSuffix;
+    const asset = suffix ? (json.assets || []).find((a) => a.name.endsWith(suffix)) : null;
+    return {
+      version,
+      update: null,
+      asset: asset ? { url: asset.browser_download_url, name: asset.name, size: asset.size } : null,
+      installable: !!asset,
+      url: json.html_url || RELEASES_URL,
+      source: 'github',
+    };
   }
 
   function menuText() {
@@ -58,7 +65,7 @@
       : `⬆️ Скачать v${state.available.version} на GitHub`;
   }
 
-  /// Возвращает { none } | { version, installable, url, update } и обновляет пункт меню.
+  /// Возвращает { none } | { version, installable, url, ... } и обновляет пункт меню.
   async function check() {
     await init();
     if (state.checking) return state.available || { none: true };
@@ -74,22 +81,37 @@
     }
   }
 
-  /// Установить, если можно; иначе открыть страницу релиза.
+  /// Установить, если можно; иначе открыть страницу релиза. onProgress(fraction, stage).
   async function install(onProgress) {
     const a = state.available;
     if (!a) return false;
-    if (!a.installable || !a.update) {
+    if (!a.installable) {
       await T.opener.openUrl(a.url || RELEASES_URL);
       return false;
     }
-    let total = 0, got = 0;
-    await a.update.downloadAndInstall((ev) => {
-      if (ev.event === 'Started') total = ev.data.contentLength || 0;
-      if (ev.event === 'Progress') { got += ev.data.chunkLength; onProgress?.(total ? got / total : 0); }
-      if (ev.event === 'Finished') onProgress?.(1);
-    });
-    await T.process.relaunch();
-    return true;
+    if (state.installing) return false;
+    state.installing = true;
+    try {
+      if (a.update) {
+        let total = 0, got = 0;
+        await a.update.downloadAndInstall((ev) => {
+          if (ev.event === 'Started') total = ev.data.contentLength || 0;
+          if (ev.event === 'Progress') { got += ev.data.chunkLength; onProgress?.(total ? got / total : 0, 'download'); }
+          if (ev.event === 'Finished') onProgress?.(1, 'install');
+        });
+        await T.process.relaunch();
+        return true;
+      }
+      const unlisten = await T.event.listen('update-progress', (e) => onProgress?.(e.payload.fraction, e.payload.stage));
+      try {
+        await invoke('install_release_asset', { url: a.asset.url, name: a.asset.name });
+      } finally {
+        unlisten();
+      }
+      return true;
+    } finally {
+      state.installing = false;
+    }
   }
 
   async function openReleases() {

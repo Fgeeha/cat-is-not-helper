@@ -7,6 +7,7 @@ mod settings;
 mod shots;
 mod stats;
 mod tray;
+mod update;
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -219,6 +220,17 @@ fn is_appimage() -> bool {
 }
 
 #[tauri::command]
+fn platform_info() -> update::PlatformInfo {
+    update::platform_info()
+}
+
+#[tauri::command]
+async fn install_release_asset(app: AppHandle, url: String, name: String) -> Result<(), String> {
+    app.state::<AppState>().stats.lock().save();
+    update::install_asset(app, url, name).await
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     actions::quit(&app);
 }
@@ -327,6 +339,8 @@ pub fn run() {
             app_version,
             platform,
             is_appimage,
+            platform_info,
+            install_release_asset,
             quit
         ])
         .build(tauri::generate_context!())

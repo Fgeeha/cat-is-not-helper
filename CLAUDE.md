@@ -77,7 +77,7 @@ npx tauri build --debug --bundles app         # отладочный .app для
 
 Bundle id у Tauri-версии другой (`…cat-is-not-helper.desktop`), чтобы на macOS две версии не делили одну запись TCC и не сбивали друг другу доступ к клавиатуре. Пути к данным при этом общие, они заданы явно в `paths.rs`.
 
-Обновления: `tauri-plugin-updater`, публичный ключ в `tauri.conf.json`, приватный только в секретах CI. Linux из rpm/deb не самообновляется, UI открывает страницу релиза; AppImage обновляется сам.
+Обновления: `ui/updates.js` сначала пробует `tauri-plugin-updater` (публичный ключ в `tauri.conf.json`, приватный только в секретах CI), а без `latest.json` или для rpm/deb берёт файл релиза через GitHub API и зовёт `install_release_asset` из `src-tauri/src/update.rs`: macOS подменяет бандл из `.app.tar.gz`, Windows запускает NSIS с `/S` через PowerShell, AppImage копирует поверх `$APPIMAGE`, rpm/deb ставятся `pkexec dnf|apt-get`. Какой файл релиза брать, решает `platform_info()` по суффиксу.
 
 ## Коммиты
 

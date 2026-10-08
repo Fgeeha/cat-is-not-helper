@@ -148,12 +148,14 @@
   await listen('update-action', async () => {
     if (!U.state.available) { await checkUpdates(true); return; }
     if (!U.state.available.installable) { await U.install(); return; }
-    cat.say(`качаю v${U.state.available.version}…`, 120);
+    const v = U.state.available.version;
+    cat.say(`качаю v${v}…`, 300);
     try {
-      await U.install((p) => cat.say(`качаю v${U.state.available.version}… ${Math.round(p * 100)}%`, 120));
+      await U.install((p, stage) => cat.say(stage === 'install' ? `ставлю v${v}, сейчас перезапущусь…` : `качаю v${v}… ${Math.round(p * 100)}%`, 300));
     } catch (err) {
-      cat.say('не вышло обновиться, открой релиз', 5);
-      invoke('set_update_text', { text: `⬆️ Скачать v${U.state.available.version} на GitHub` });
+      console.error('update failed', err);
+      cat.say(`не вышло: ${String(err).slice(0, 60)}`, 6);
+      invoke('set_update_text', { text: `⬆️ Скачать v${v} на GitHub` });
       U.state.available.installable = false;
     }
   });

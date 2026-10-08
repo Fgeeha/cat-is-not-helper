@@ -238,7 +238,7 @@
   const version = await invoke('app_version');
   $('version').textContent = `Текущая версия: ${version}`;
   if (platform === 'linux' && !appimage) {
-    $('update-hint').textContent = 'Установлено из пакета (rpm/deb): обновление ставится через пакетный менеджер. Кнопка проверит новую версию и откроет страницу релиза.';
+    $('update-hint').textContent = 'Установлено из пакета (rpm/deb): новая версия скачается из GitHub Releases и поставится через пакетный менеджер, система спросит пароль администратора.';
   }
 
   const U = window.CatUpdates;
@@ -258,11 +258,14 @@
         $('btn-release').addEventListener('click', () => U.openReleases());
         return;
       }
-      status.innerHTML = `<span class="warn">Доступна версия ${result.version}</span> <button class="primary small" id="btn-install">Обновить</button>`;
+      const how = result.source === 'github'
+        ? (U.state.info.package ? ` · через ${U.state.info.package === 'rpm' ? 'dnf' : 'apt'}, система спросит пароль` : ' · из GitHub Releases')
+        : '';
+      status.innerHTML = `<span class="warn">Доступна версия ${result.version}</span><span class="muted">${how}</span> <button class="primary small" id="btn-install">Обновить</button>`;
       $('btn-install').addEventListener('click', async () => {
         status.textContent = 'Скачиваю…';
         try {
-          await U.install((p) => { status.textContent = p >= 1 ? 'Устанавливаю и перезапускаюсь…' : `Скачиваю… ${Math.round(p * 100)}%`; });
+          await U.install((p, stage) => { status.textContent = stage === 'install' ? 'Устанавливаю и перезапускаюсь…' : `Скачиваю… ${Math.round(p * 100)}%`; });
         } catch (err) {
           status.innerHTML = `<span class="bad">Не удалось обновиться: ${err}</span> <button class="plain small" id="btn-release">Открыть релиз</button>`;
           $('btn-release').addEventListener('click', () => U.openReleases());
