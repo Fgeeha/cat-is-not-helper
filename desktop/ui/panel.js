@@ -26,7 +26,8 @@
   let settings = await invoke('get_settings');
   let held = await invoke('get_held');
   preview.applySettings(settings);
-  if (held.thumb) preview.hold(held.thumb);
+  const showHeld = (h) => { if (h.path) preview.hold(h.thumb, { name: h.name }); else preview.putAway(); };
+  showHeld(held);
 
   await listen('tap', (e) => preview.tap(e.payload.paw));
   await listen('tick', (e) => { preview.tick(e.payload.cpm); if ($('tab-stats').classList.contains('active')) refreshStats(); });
@@ -34,7 +35,7 @@
   await listen('feed', () => preview.feed());
   await listen('held-changed', (e) => {
     held = e.payload;
-    if (held.thumb) preview.hold(held.thumb); else preview.putAway();
+    showHeld(held);
     if ($('tab-gallery').classList.contains('active')) refreshGallery();
   });
   await listen('settings-changed', (e) => { settings = e.payload; preview.applySettings(settings); fillSettings(); });
@@ -112,7 +113,7 @@
     $('shots-count').textContent = `${items.length} шт.`;
     const root = $('gallery');
     if (!items.length) {
-      root.innerHTML = `<div class="empty"><div class="big">🐾</div><b>Пока пусто</b><br>Нажми «Сделать скриншот» или перетащи картинку прямо на котика — он подержит.</div>`;
+      root.innerHTML = `<div class="empty"><div class="big">🐾</div><b>Пока пусто</b><br>Нажми «Сделать скриншот» или перетащи любой файл прямо на котика — он подержит.</div>`;
       return;
     }
     root.innerHTML = '<div class="grid"></div>';
@@ -121,8 +122,10 @@
       const isHeld = held.path === item.path;
       const cell = document.createElement('div');
       cell.className = `cell${isHeld ? ' held' : ''}`;
+      const ext = (item.name.includes('.') ? item.name.split('.').pop() : '').toUpperCase().slice(0, 5) || 'ФАЙЛ';
+      const placeholder = item.isImage ? '<span class="muted">…</span>' : `<div class="doc"><div class="doc-ext">${ext}</div><div class="muted">${(item.size / 1024).toFixed(0)} КБ</div></div>`;
       cell.innerHTML = `
-        <div class="thumb"><span class="muted">…</span>${isHeld ? '<span class="badge">🐾 у котика</span>' : ''}</div>
+        <div class="thumb">${placeholder}${isHeld ? '<span class="badge">🐾 у котика</span>' : ''}</div>
         <div class="name" title="${item.name}">${item.name}</div>
         <div class="row">
           <button class="plain small act-give">${isHeld ? 'Забрать у котика' : '🐾 Дать котику'}</button>
@@ -142,6 +145,7 @@
       });
       cell.querySelector('.thumb').addEventListener('dblclick', () => invoke('open_shot', { path: item.path }));
       grid.appendChild(cell);
+      if (!item.isImage) continue;
       thumbFor(item.path).then((data) => {
         if (!data) return;
         const box = cell.querySelector('.thumb');

@@ -30,6 +30,7 @@ dirs = "6"
 trash = "5"
 parking_lot = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+arboard = { version = "3", default-features = false, features = ["image-data"] }
 futures-util = "0.3"
 
 # Захват экрана: на macOS и Windows — xcap; на Linux — напрямую X11 (xcap тянет pipewire,

@@ -24,7 +24,7 @@ struct GalleryView: View {
                 VStack(spacing: 10) {
                     Text("🐾").font(.system(size: 48))
                     Text("Пока пусто").font(.headline)
-                    Text("Нажми «Сделать скриншот» или перетащи картинку прямо на котика — он подержит.")
+                    Text("Нажми «Сделать скриншот» или перетащи любой файл прямо на котика — он подержит.")
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .frame(maxWidth: 360)
@@ -121,7 +121,7 @@ struct GalleryCell: View {
             guard image == nil else { return }
             let target = url
             DispatchQueue.global(qos: .utility).async {
-                let loaded = ImageLoader.thumbnail(url: target, maxPixel: 400)
+                let loaded = FileKind.preview(for: target, maxPixel: 400)
                 DispatchQueue.main.async {
                     if url == target { image = loaded }
                 }

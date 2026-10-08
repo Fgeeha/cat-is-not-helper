@@ -27,6 +27,8 @@ pub struct AppState {
     pub held: Mutex<Option<PathBuf>>,
     pub tray: Mutex<Option<tray::TrayMenu>>,
     pub last_position_save: Mutex<Instant>,
+    /// Держим буфер обмена живым: на X11 содержимое пропадает, если владелец закрыт.
+    pub clipboard: Mutex<Option<arboard::Clipboard>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -113,6 +115,11 @@ fn get_held(app: AppHandle) -> actions::HeldPayload {
 #[tauri::command]
 fn open_held(app: AppHandle) {
     actions::open_held(&app);
+}
+
+#[tauri::command]
+fn copy_held(app: AppHandle) {
+    actions::copy_held(&app);
 }
 
 #[tauri::command]
@@ -250,6 +257,7 @@ pub fn run() {
             held: Mutex::new(None),
             tray: Mutex::new(None),
             last_position_save: Mutex::new(Instant::now()),
+            clipboard: Mutex::new(None),
         })
         .setup(|app| {
             let handle = app.handle().clone();
@@ -320,6 +328,7 @@ pub fn run() {
             put_away,
             get_held,
             open_held,
+            copy_held,
             delete_shot,
             reveal_shot,
             open_shot,

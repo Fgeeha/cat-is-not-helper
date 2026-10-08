@@ -196,7 +196,17 @@
       n.held = el('g', { transform: 'translate(130,164) rotate(-3)', class: 'held' });
       n.heldFrame = el('rect', { x: -55, y: -39, width: 110, height: 78, rx: 3, fill: '#FFFFFF', filter: 'url(#held-shadow)' });
       n.heldImg = el('image', { x: -52, y: -36, width: 104, height: 72, preserveAspectRatio: 'xMidYMid meet' });
-      n.held.append(n.heldFrame, n.heldImg);
+      // Карточка документа: когда котик держит не картинку.
+      n.heldDoc = el('g');
+      n.heldDoc.append(
+        el('rect', { x: -52, y: -36, width: 104, height: 72, fill: '#F4F5F8' }),
+        el('path', { d: 'M-18,-28 h22 l12,12 v34 h-34 z', fill: '#FFFFFF', stroke: '#B8BCC6', 'stroke-width': 1.5, 'stroke-linejoin': 'round' }),
+        el('path', { d: 'M4,-28 v12 h12', fill: 'none', stroke: '#B8BCC6', 'stroke-width': 1.5, 'stroke-linejoin': 'round' }),
+      );
+      n.heldExt = el('text', { x: 0, y: 8, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#ED8C33', 'font-family': 'system-ui, sans-serif' });
+      n.heldName = el('text', { x: 0, y: 30, 'text-anchor': 'middle', 'font-size': 7, fill: '#555', 'font-family': 'system-ui, sans-serif' });
+      n.heldDoc.append(n.heldExt, n.heldName);
+      n.held.append(n.heldFrame, n.heldImg, n.heldDoc);
       body.appendChild(n.held);
 
       // Лапки
@@ -330,10 +340,24 @@
       setTimeout(() => { s.eating = false; s.petBoostUntil = Date.now() + 3000; this.render(); }, 2200);
     }
 
-    hold(dataUrl) {
-      this.state.held = dataUrl;
+    /// dataUrl — миниатюра картинки; для документа null и имя файла в meta.name.
+    hold(dataUrl, meta = {}) {
+      this.state.held = dataUrl || meta.name || 'doc';
       this.state.lastActivity = Date.now();
-      this.n.heldImg.setAttribute('href', dataUrl);
+      if (dataUrl) {
+        this.n.heldImg.setAttribute('href', dataUrl);
+        this.n.heldImg.style.display = '';
+        this.n.heldDoc.style.display = 'none';
+      } else {
+        const name = meta.name || '';
+        const ext = (name.includes('.') ? name.split('.').pop() : '').slice(0, 5).toUpperCase() || 'ФАЙЛ';
+        const base = name.replace(/^cat-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-/, '');
+        this.n.heldExt.textContent = ext;
+        this.n.heldName.textContent = base.length > 22 ? `${base.slice(0, 20)}…` : base;
+        this.n.heldImg.removeAttribute('href');
+        this.n.heldImg.style.display = 'none';
+        this.n.heldDoc.style.display = '';
+      }
       this.render();
     }
 

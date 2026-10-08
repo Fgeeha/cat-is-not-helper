@@ -15,11 +15,12 @@ pub struct ShotInfo {
     pub name: String,
     pub modified: i64,
     pub size: u64,
+    pub is_image: bool,
 }
 
 const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic"];
 
-fn is_image(path: &Path) -> bool {
+pub fn is_image(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
@@ -43,15 +44,17 @@ fn info(path: &Path) -> Option<ShotInfo> {
         name: path.file_name()?.to_string_lossy().into_owned(),
         modified,
         size: meta.len(),
+        is_image: is_image(path),
     })
 }
 
+/// Все файлы в папке котика: картинки и любые документы, которые ему дали.
 pub fn list() -> Vec<ShotInfo> {
     let mut items: Vec<ShotInfo> = std::fs::read_dir(paths::shots_dir())
         .map(|rd| {
             rd.filter_map(|e| e.ok())
                 .map(|e| e.path())
-                .filter(|p| p.is_file() && is_image(p))
+                .filter(|p| p.is_file())
                 .filter(|p| !p.file_name().map(|n| n.to_string_lossy().starts_with('.')).unwrap_or(true))
                 .filter_map(|p| info(&p))
                 .collect()
@@ -61,10 +64,10 @@ pub fn list() -> Vec<ShotInfo> {
     items
 }
 
-/// Копирует картинку в папку котика. Повторный импорт того же файла
-/// (то же исходное имя и размер) возвращает уже существующую копию.
+/// Копирует файл (картинку или любой документ) в папку котика. Повторный импорт
+/// того же файла (то же исходное имя и размер) возвращает уже существующую копию.
 pub fn import(source: &Path) -> Option<PathBuf> {
-    if !is_image(source) {
+    if !source.is_file() {
         return None;
     }
     let dir = paths::shots_dir();
@@ -92,7 +95,11 @@ pub fn delete(path: &Path) -> bool {
 }
 
 /// Миниатюра как data URL (PNG). Большие скриншоты не гоняем в webview целиком.
+/// Для не-картинок возвращает None — интерфейс рисует карточку документа сам.
 pub fn thumbnail_data_url(path: &Path, max: u32) -> Option<String> {
+    if !is_image(path) {
+        return None;
+    }
     let img = image::open(path).ok()?;
     let thumb = img.thumbnail(max, max);
     let mut buf = Cursor::new(Vec::new());

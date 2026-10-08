@@ -22,8 +22,15 @@
   updateScaleVar();
   window.addEventListener('resize', updateScaleVar);
 
+  const platformInfo = await invoke('platform_info');
+  const isLinux = platformInfo.os === 'linux';
+
+  function showHeld(h) {
+    if (h.path) cat.hold(h.thumb, { name: h.name }); else cat.putAway();
+  }
+
   cat.applySettings(settings);
-  if (held.thumb) cat.hold(held.thumb);
+  showHeld(held);
 
   // MARK: - События из Rust
 
@@ -34,7 +41,7 @@
   await listen('feed', () => cat.feed());
   await listen('held-changed', (e) => {
     held = e.payload;
-    if (held.thumb) cat.hold(held.thumb); else cat.putAway();
+    showHeld(held);
   });
   await listen('settings-changed', (e) => {
     settings = e.payload;
@@ -97,23 +104,31 @@
     invoke('show_cat_menu');
   });
 
-  // Забрать картинку: тянем из лапок наружу как файл.
+  // Забрать: тянем из лапок наружу как файл. На Linux перетаскивание из окна
+  // в другие приложения ненадёжно, поэтому там же кладём в буфер обмена.
   async function dragHeldOut() {
     const path = held.path;
     const icon = held.thumb;
     down = null;
+    if (isLinux) {
+      await invoke('copy_held'); // скажет «в буфере обмена, вставляй»
+    }
     try {
       await invoke('put_away', { message: null });
-      await T.drag.startDrag({ item: [path], icon }, (event) => {
+      await T.drag.startDrag({ item: [path], icon: icon || path }, (event) => {
         const result = (event && (event.result || event.payload?.result)) || '';
         setTimeout(() => {
           if (held.path === path) return; // вернули котику
+          if (isLinux) return; // сообщение про буфер уже показано
           cat.say(String(result).toLowerCase() === 'dropped' ? 'забирай, твоё' : 'ладно, отпустил');
         }, 100);
       });
     } catch (err) {
       console.error('drag out failed', err);
-      await invoke('give_shot', { path });
+      if (!isLinux) {
+        await invoke('copy_held');
+        await invoke('put_away', { message: null });
+      }
     }
   }
 

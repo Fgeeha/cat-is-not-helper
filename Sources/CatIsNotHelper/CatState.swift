@@ -118,16 +118,17 @@ final class CatState: ObservableObject {
     }
 
     func hold(url: URL) {
-        guard let image = ImageLoader.thumbnail(url: url, maxPixel: 480) else {
-            say("это не картинка 🤔")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            say("этого файла уже нет 🤔")
             return
         }
+        let image = FileKind.preview(for: url, maxPixel: 480)
         lastActivity = Date()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
             heldImage = image
             heldURL = url
         }
-        say(["держу!", "о, скриншот", "не потеряю", "моя прелесть"].randomElement()!)
+        say(["держу!", "о, что-то новое", "не потеряю", "моя прелесть"].randomElement()!)
     }
 
     func putAway(message: String? = "ладно, забирай") {

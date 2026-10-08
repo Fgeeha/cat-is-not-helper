@@ -15,7 +15,23 @@ enum ImageLoader {
     }
 }
 
-/// Папка со скриншотами котика: ~/Pictures/CatIsNotHelper
+enum FileKind {
+    static func isImage(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
+    }
+
+    /// Миниатюра картинки, а для любого другого файла — его системная иконка.
+    static func preview(for url: URL, maxPixel: Int) -> NSImage {
+        if isImage(url), let thumb = ImageLoader.thumbnail(url: url, maxPixel: maxPixel) {
+            return thumb
+        }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: 256, height: 256)
+        return icon
+    }
+}
+
+/// Папка котика: ~/Pictures/CatIsNotHelper. Скриншоты и любые файлы, которые ему дали.
 final class ScreenshotManager: ObservableObject {
     @Published private(set) var items: [URL] = []
     let directory: URL
@@ -41,8 +57,8 @@ final class ScreenshotManager: ObservableObject {
             at: directory,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles])) ?? []
-        let images = urls.filter { UTType(filenameExtension: $0.pathExtension)?.conforms(to: .image) ?? false }
-        items = images.sorted { modified($0) > modified($1) }
+        let files = urls.filter { !$0.hasDirectoryPath && !$0.lastPathComponent.hasPrefix(".") }
+        items = files.sorted { modified($0) > modified($1) }
     }
 
     private func modified(_ url: URL) -> Date {
@@ -69,12 +85,13 @@ final class ScreenshotManager: ObservableObject {
         }
     }
 
-    /// Копирует стороннюю картинку в папку котика (если она ещё не там).
+    /// Копирует сторонний файл (картинку или любой документ) в папку котика, если он ещё не там.
     func importImage(from source: URL) -> URL? {
         if source.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL {
             return source
         }
-        let ext = source.pathExtension.isEmpty ? "png" : source.pathExtension
+        guard !source.hasDirectoryPath else { return nil }
+        let ext = source.pathExtension.isEmpty ? "bin" : source.pathExtension
         let base = source.deletingPathExtension().lastPathComponent
         if let existing = existingCopy(ofName: "\(base).\(ext)", size: fileSize(source)) {
             return existing

@@ -13,7 +13,16 @@ use crate::{input, shots, tray, AppState, SayPayload};
 #[serde(rename_all = "camelCase")]
 pub struct HeldPayload {
     pub path: Option<String>,
+    pub name: Option<String>,
+    pub is_image: bool,
+    /// Миниатюра для картинок; для документов None, интерфейс рисует карточку.
     pub thumb: Option<String>,
+}
+
+impl HeldPayload {
+    fn empty() -> Self {
+        HeldPayload { path: None, name: None, is_image: false, thumb: None }
+    }
 }
 
 pub fn say(app: &AppHandle, text: impl Into<String>, seconds: f64) {
@@ -58,9 +67,44 @@ pub fn held_payload(app: &AppHandle) -> HeldPayload {
     match held {
         Some(path) => HeldPayload {
             thumb: shots::thumbnail_data_url(&path, 480),
+            is_image: shots::is_image(&path),
+            name: path.file_name().map(|n| n.to_string_lossy().into_owned()),
             path: Some(path.to_string_lossy().into_owned()),
         },
-        None => HeldPayload { path: None, thumb: None },
+        None => HeldPayload::empty(),
+    }
+}
+
+/// Положить то, что держит котик, в буфер обмена: картинку как изображение,
+/// любой файл — как путь текстом. Нужно там, где перетаскивание наружу не работает.
+pub fn copy_held(app: &AppHandle) {
+    let held = app.state::<AppState>().held.lock().clone();
+    let Some(path) = held else { return };
+    let state = app.state::<AppState>();
+    let mut guard = state.clipboard.lock();
+    if guard.is_none() {
+        *guard = arboard::Clipboard::new().ok();
+    }
+    let Some(clipboard) = guard.as_mut() else {
+        say(app, "буфер обмена недоступен", 3.0);
+        return;
+    };
+    let as_image = if shots::is_image(&path) {
+        image::open(&path).ok().map(|img| img.to_rgba8())
+    } else {
+        None
+    };
+    let result = match as_image {
+        Some(rgba) => clipboard.set_image(arboard::ImageData {
+            width: rgba.width() as usize,
+            height: rgba.height() as usize,
+            bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+        }),
+        None => clipboard.set_text(path.to_string_lossy().into_owned()),
+    };
+    match result {
+        Ok(()) => say(app, "в буфере обмена, вставляй", 3.0),
+        Err(err) => say(app, format!("не вышло скопировать: {err}"), 4.0),
     }
 }
 
@@ -68,14 +112,14 @@ pub fn hold(app: &AppHandle, path: PathBuf, announce: bool) {
     *app.state::<AppState>().held.lock() = Some(path);
     let _ = app.emit("held-changed", held_payload(app));
     if announce {
-        say(app, ["держу!", "о, скриншот", "не потеряю", "моя прелесть"][fastrand(4)], 2.6);
+        say(app, ["держу!", "о, что-то новое", "не потеряю", "моя прелесть"][fastrand(4)], 2.6);
     }
     tray::refresh(app);
 }
 
 pub fn put_away(app: &AppHandle, message: Option<&str>) {
     *app.state::<AppState>().held.lock() = None;
-    let _ = app.emit("held-changed", HeldPayload { path: None, thumb: None });
+    let _ = app.emit("held-changed", HeldPayload::empty());
     if let Some(text) = message {
         say(app, text, 2.6);
     }
@@ -92,10 +136,10 @@ pub fn open_held(app: &AppHandle) {
     }
 }
 
-/// Картинки, брошенные на котика или выбранные в галерее.
+/// Файлы, брошенные на котика или выбранные в галерее: картинки и любые документы.
 pub fn give(app: &AppHandle, source: &Path) -> bool {
     let Some(stored) = shots::import(source) else {
-        say(app, "это не картинка 🤔", 2.6);
+        say(app, "это я взять не могу 🤔", 2.6);
         return false;
     };
     if stored != source {
@@ -121,9 +165,16 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) {
 }
 
 pub fn apply_settings(app: &AppHandle, settings: &Settings) {
+    // Сначала сообщаем окнам: внешность применится даже если окно не удастся изменить.
+    let _ = app.emit("settings-changed", settings);
     if let Some(cat) = app.get_webview_window("cat") {
         let (w, h) = settings.window_size();
+        // На Linux (GTK) неизменяемое окно игнорирует set_size — на время снимаем запрет.
+        let _ = cat.set_resizable(true);
+        let _ = cat.set_min_size(None::<LogicalSize<f64>>);
+        let _ = cat.set_max_size(None::<LogicalSize<f64>>);
         let _ = cat.set_size(Size::Logical(LogicalSize::new(w, h)));
+        let _ = cat.set_resizable(false);
         let _ = cat.set_always_on_top(settings.always_on_top);
         let _ = cat.set_visible_on_all_workspaces(settings.all_spaces);
         if settings.cat_visible {
@@ -132,7 +183,6 @@ pub fn apply_settings(app: &AppHandle, settings: &Settings) {
             let _ = cat.hide();
         }
     }
-    let _ = app.emit("settings-changed", settings);
     tray::refresh(app);
 }
 

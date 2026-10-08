@@ -231,6 +231,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.putAway()
     }
 
+    /// Картинку — как изображение и как файл, любой документ — как файл.
+    func copyHeld() {
+        guard let url = state.heldURL else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        var objects: [NSPasteboardWriting] = [url as NSURL]
+        if FileKind.isImage(url), let image = NSImage(contentsOf: url) {
+            objects.insert(image, at: 0)
+        }
+        pasteboard.writeObjects(objects)
+        state.say("в буфере обмена, вставляй", seconds: 3)
+    }
+
     func requestAccess() {
         _ = InputMonitor.isTrusted(prompt: true)
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {

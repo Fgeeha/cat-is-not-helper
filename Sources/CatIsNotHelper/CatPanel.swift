@@ -100,12 +100,11 @@ final class CatContainerView: NSView, NSDraggingSource {
         return true
     }
 
+    /// Любые файлы: картинки котик показывает, остальное держит как документ.
     private func imageURLs(from info: NSDraggingInfo) -> [URL] {
-        let options: [NSPasteboard.ReadingOptionKey: Any] = [
-            .urlReadingFileURLsOnly: true,
-            .urlReadingContentsConformToTypes: [UTType.image.identifier],
-        ]
-        return (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL]) ?? []
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        let urls = (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL]) ?? []
+        return urls.filter { !$0.hasDirectoryPath }
     }
 }
 
