@@ -106,6 +106,14 @@ pub fn capture_physical(x: i32, y: i32, width: u32, height: u32) -> Result<PathB
     if width < 2 || height < 2 {
         return Err("слишком маленькая область".into());
     }
+    let image = grab(x, y, width, height)?;
+    let dest = paths::shots_dir().join(format!("cat-{}.png", stamp()));
+    image.save(&dest).map_err(|e| format!("не удалось сохранить: {e}"))?;
+    Ok(dest)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn grab(x: i32, y: i32, width: u32, height: u32) -> Result<image::RgbaImage, String> {
     let monitor = xcap::Monitor::from_point(x + (width as i32) / 2, y + (height as i32) / 2)
         .map_err(|e| format!("монитор не найден: {e}"))?;
     let mx = monitor.x().map_err(|e| e.to_string())?;
@@ -119,11 +127,54 @@ pub fn capture_physical(x: i32, y: i32, width: u32, height: u32) -> Result<PathB
     let right = (x - mx + width as i32).clamp(left + 1, mw);
     let bottom = (y - my + height as i32).clamp(top + 1, mh);
 
-    let image = monitor
+    monitor
         .capture_region(left as u32, top as u32, (right - left) as u32, (bottom - top) as u32)
+        .map_err(|e| format!("не удалось снять экран: {e}"))
+}
+
+/// Linux: читаем область корневого окна X11. Координаты Tauri на X11 совпадают с корневыми.
+#[cfg(target_os = "linux")]
+fn grab(x: i32, y: i32, width: u32, height: u32) -> Result<image::RgbaImage, String> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{ConnectionExt, ImageFormat};
+
+    let (conn, screen_num) = x11rb::connect(None).map_err(|e| format!("нет X11: {e}"))?;
+    let setup = conn.setup();
+    let screen = &setup.roots[screen_num];
+    let root_w = screen.width_in_pixels as i32;
+    let root_h = screen.height_in_pixels as i32;
+
+    let left = x.clamp(0, root_w - 1);
+    let top = y.clamp(0, root_h - 1);
+    let right = (x + width as i32).clamp(left + 1, root_w);
+    let bottom = (y + height as i32).clamp(top + 1, root_h);
+    let (w, h) = ((right - left) as u32, (bottom - top) as u32);
+
+    let reply = conn
+        .get_image(ImageFormat::Z_PIXMAP, screen.root, left as i16, top as i16, w as u16, h as u16, !0)
+        .map_err(|e| format!("не удалось снять экран: {e}"))?
+        .reply()
         .map_err(|e| format!("не удалось снять экран: {e}"))?;
 
-    let dest = paths::shots_dir().join(format!("cat-{}.png", stamp()));
-    image.save(&dest).map_err(|e| format!("не удалось сохранить: {e}"))?;
-    Ok(dest)
+    let bpp = setup
+        .pixmap_formats
+        .iter()
+        .find(|f| f.depth == reply.depth)
+        .map(|f| f.bits_per_pixel)
+        .unwrap_or(32) as usize;
+    let bytes_per_pixel = (bpp / 8).max(1);
+    let stride = (w as usize * bytes_per_pixel + 3) / 4 * 4;
+    let mut out = image::RgbaImage::new(w, h);
+    for row in 0..h as usize {
+        for col in 0..w as usize {
+            let i = row * stride + col * bytes_per_pixel;
+            if i + 2 >= reply.data.len() {
+                break;
+            }
+            // X11 отдаёт BGR(X) при little-endian и 24/32 битах.
+            let (b, g, r) = (reply.data[i], reply.data[i + 1], reply.data[i + 2]);
+            out.put_pixel(col as u32, row as u32, image::Rgba([r, g, b, 255]));
+        }
+    }
+    Ok(out)
 }
