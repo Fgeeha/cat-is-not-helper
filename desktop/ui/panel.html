@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Котик</title>
+  <link rel="stylesheet" href="cat.css" />
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <nav class="tabs">
+    <button data-tab="stats">Статистика</button>
+    <button data-tab="gallery">Галерея</button>
+    <button data-tab="settings">Настройки</button>
+  </nav>
+
+  <main>
+    <!-- Статистика -->
+    <section class="tab" id="tab-stats">
+      <div class="row" style="margin-bottom: 12px">
+        <h2 class="grow">Статистика котика</h2>
+        <span class="muted" id="since"></span>
+      </div>
+      <div class="cards" id="cards"></div>
+      <div class="card block">
+        <h3>Последние 14 дней</h3>
+        <svg class="chart" id="chart-days"></svg>
+        <div class="muted" id="best-day"></div>
+      </div>
+      <div class="card block">
+        <h3>Сегодня по часам</h3>
+        <svg class="chart" id="chart-hours" style="height: 150px"></svg>
+      </div>
+      <div class="card block">
+        <h3>Котик</h3>
+        <div class="row">
+          <div class="grow">
+            <div id="mood-line">Настроение: 😺 спокойный</div>
+            <div class="bar-meter" style="margin: 6px 0"><div id="happy-bar" style="width: 60%"></div></div>
+            <div class="muted" id="happy-text">Счастье: 60%</div>
+          </div>
+          <div class="grow" id="cat-counts"></div>
+        </div>
+        <div class="muted" id="held-line" style="margin-top: 8px"></div>
+      </div>
+    </section>
+
+    <!-- Галерея -->
+    <section class="tab" id="tab-gallery">
+      <div class="toolbar">
+        <button class="primary" id="btn-capture">📸 Сделать скриншот</button>
+        <button class="plain" id="btn-folder">Открыть папку</button>
+        <span class="grow"></span>
+        <span class="muted" id="shots-count"></span>
+      </div>
+      <div id="gallery"></div>
+    </section>
+
+    <!-- Настройки -->
+    <section class="tab" id="tab-settings">
+      <div class="settings">
+        <div class="preview">
+          <h3>Так он выглядит</h3>
+          <div id="preview" class="cat-stage"></div>
+          <p class="muted">Превью живое: котик тапает вместе с тобой и здесь.</p>
+          <div class="row" style="justify-content: center">
+            <button class="plain small" id="btn-pet">Погладить</button>
+            <button class="plain small" id="btn-feed">Покормить 🐟</button>
+          </div>
+        </div>
+        <div class="form">
+          <div class="card group">
+            <h3>Внешность</h3>
+            <label class="line">Окрас <select id="s-fur"></select></label>
+            <label class="line">Глаза <select id="s-eyes"></select></label>
+            <label class="line">Аксессуар <select id="s-accessory"></select></label>
+            <label class="line">Клавиатура <select id="s-keyboard"></select></label>
+            <label class="line">Отразить (хвост слева) <input type="checkbox" id="s-mirrored" /></label>
+          </div>
+          <div class="card group">
+            <h3>Размер</h3>
+            <label class="line">Пресет <span class="seg" id="s-size-presets"></span></label>
+            <label class="line">Точно <input type="range" id="s-scale" min="0.5" max="2.5" step="0.05" /><span id="s-scale-value" class="muted"></span></label>
+            <label class="line">Непрозрачность <input type="range" id="s-opacity" min="0.3" max="1" step="0.05" /><span id="s-opacity-value" class="muted"></span></label>
+            <div class="muted" id="s-size-px"></div>
+          </div>
+          <div class="card group">
+            <h3>Поведение</h3>
+            <label class="line">Фразы в пузырьках <input type="checkbox" id="s-bubbles" /></label>
+            <label class="line">Поверх всех окон <input type="checkbox" id="s-top" /></label>
+            <label class="line">На всех рабочих столах <input type="checkbox" id="s-spaces" /></label>
+            <label class="line">Показывать котика <input type="checkbox" id="s-visible" /></label>
+            <label class="line">Запускать при входе в систему <input type="checkbox" id="s-autostart" /></label>
+          </div>
+          <div class="card group">
+            <h3>Обновления</h3>
+            <div class="row">
+              <span id="version" class="grow"></span>
+              <button class="plain small" id="btn-check">Проверить сейчас</button>
+            </div>
+            <label class="line">Проверять автоматически <input type="checkbox" id="s-updates" /></label>
+            <div id="update-status" class="muted" style="margin-top: 6px"></div>
+            <p class="muted" id="update-hint">Обновления берутся из GitHub Releases. Приложение скачает новую версию, установит и перезапустится; статистика и настройки сохраняются.</p>
+          </div>
+          <div class="card group">
+            <h3>Доступ к клавиатуре</h3>
+            <div id="access-line"></div>
+            <button class="plain small" id="btn-access" style="margin-top: 8px">Открыть системные настройки</button>
+            <p class="muted">Котик считает только количество нажатий. Какие именно клавиши ты нажимаешь — не записывается и никуда не отправляется.</p>
+          </div>
+          <div class="card group muted">
+            <h3 style="color: var(--text)">Управление</h3>
+            Клик по котику — погладить<br />
+            Двойной клик — открыть то, что он держит<br />
+            Потянуть за картинку в лапках — забрать её (в проводник, чат, куда угодно)<br />
+            Потянуть за котика — передвинуть<br />
+            Правый клик — меню<br />
+            Перетащи картинку на котика — он возьмёт её в лапки
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="cat-renderer.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

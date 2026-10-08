@@ -3,3 +3,8 @@ build/
 .swiftpm/
 *.xcodeproj
 .DS_Store
+
+# Tauri (desktop/)
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

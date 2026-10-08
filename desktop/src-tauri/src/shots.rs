@@ -1,0 +1,129 @@
+//! Скриншоты котика: папка, список, импорт, миниатюры, захват области экрана.
+
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
+
+use base64::Engine;
+use serde::Serialize;
+
+use crate::paths;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShotInfo {
+    pub path: String,
+    pub name: String,
+    pub modified: i64,
+    pub size: u64,
+}
+
+const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic"];
+
+fn is_image(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+pub fn stamp() -> String {
+    chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string()
+}
+
+fn info(path: &Path) -> Option<ShotInfo> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    Some(ShotInfo {
+        path: path.to_string_lossy().into_owned(),
+        name: path.file_name()?.to_string_lossy().into_owned(),
+        modified,
+        size: meta.len(),
+    })
+}
+
+pub fn list() -> Vec<ShotInfo> {
+    let mut items: Vec<ShotInfo> = std::fs::read_dir(paths::shots_dir())
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.is_file() && is_image(p))
+                .filter(|p| !p.file_name().map(|n| n.to_string_lossy().starts_with('.')).unwrap_or(true))
+                .filter_map(|p| info(&p))
+                .collect()
+        })
+        .unwrap_or_default();
+    items.sort_by(|a, b| b.modified.cmp(&a.modified));
+    items
+}
+
+/// Копирует картинку в папку котика. Повторный импорт того же файла
+/// (то же исходное имя и размер) возвращает уже существующую копию.
+pub fn import(source: &Path) -> Option<PathBuf> {
+    if !is_image(source) {
+        return None;
+    }
+    let dir = paths::shots_dir();
+    if source.parent().map(|p| p == dir).unwrap_or(false) {
+        return Some(source.to_path_buf());
+    }
+    let name = source.file_name()?.to_string_lossy().into_owned();
+    let size = std::fs::metadata(source).ok()?.len();
+    if let Some(existing) = list()
+        .into_iter()
+        .find(|s| s.name.ends_with(&format!("-{name}")) && s.size == size)
+    {
+        return Some(PathBuf::from(existing.path));
+    }
+    let dest = dir.join(format!("cat-{}-{}", stamp(), name));
+    std::fs::copy(source, &dest).ok()?;
+    Some(dest)
+}
+
+pub fn delete(path: &Path) -> bool {
+    if path.parent().map(|p| p != paths::shots_dir()).unwrap_or(true) {
+        return false; // удаляем только своё
+    }
+    trash::delete(path).is_ok() || std::fs::remove_file(path).is_ok()
+}
+
+/// Миниатюра как data URL (PNG). Большие скриншоты не гоняем в webview целиком.
+pub fn thumbnail_data_url(path: &Path, max: u32) -> Option<String> {
+    let img = image::open(path).ok()?;
+    let thumb = img.thumbnail(max, max);
+    let mut buf = Cursor::new(Vec::new());
+    thumb.write_to(&mut buf, image::ImageFormat::Png).ok()?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(buf.into_inner());
+    Some(format!("data:image/png;base64,{encoded}"))
+}
+
+/// Захват прямоугольника экрана. Координаты — физические пиксели в системе координат экрана.
+pub fn capture_physical(x: i32, y: i32, width: u32, height: u32) -> Result<PathBuf, String> {
+    if width < 2 || height < 2 {
+        return Err("слишком маленькая область".into());
+    }
+    let monitor = xcap::Monitor::from_point(x + (width as i32) / 2, y + (height as i32) / 2)
+        .map_err(|e| format!("монитор не найден: {e}"))?;
+    let mx = monitor.x().map_err(|e| e.to_string())?;
+    let my = monitor.y().map_err(|e| e.to_string())?;
+    let mw = monitor.width().map_err(|e| e.to_string())? as i32;
+    let mh = monitor.height().map_err(|e| e.to_string())? as i32;
+
+    // Обрезаем по границам монитора.
+    let left = (x - mx).clamp(0, mw - 1);
+    let top = (y - my).clamp(0, mh - 1);
+    let right = (x - mx + width as i32).clamp(left + 1, mw);
+    let bottom = (y - my + height as i32).clamp(top + 1, mh);
+
+    let image = monitor
+        .capture_region(left as u32, top as u32, (right - left) as u32, (bottom - top) as u32)
+        .map_err(|e| format!("не удалось снять экран: {e}"))?;
+
+    let dest = paths::shots_dir().join(format!("cat-{}.png", stamp()));
+    image.save(&dest).map_err(|e| format!("не удалось сохранить: {e}"))?;
+    Ok(dest)
+}

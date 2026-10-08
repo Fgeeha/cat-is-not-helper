@@ -1,0 +1,16 @@
+[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}} {{exec_arg}}
+Icon={{icon}}
+Name={{name}}
+Name[ru]=Котик
+Comment[ru]=Котик, который тапает вместе с тобой
+Terminal=false
+Type=Application
+StartupNotify=false
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}

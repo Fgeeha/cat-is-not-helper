@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Что это
 
-Нативное macOS-приложение (Swift 5.9+, SwiftUI + AppKit, macOS 13+): котик-питомец поверх всех окон, который тапает лапками в такт нажатиям клавиш, ведёт статистику и держит скриншоты. Собирается только через SwiftPM, Xcode-проекта нет. Язык интерфейса, комментариев, README и коммитов — русский.
+Котик-питомец поверх всех окон, который тапает лапками в такт нажатиям клавиш, ведёт статистику и держит скриншоты. Две реализации с одинаковым поведением и общими данными (`stats.json`, папка скриншотов):
+
+- **Нативная macOS** (Swift 5.9+, SwiftUI + AppKit, macOS 13+) в `Sources/`, `Package.swift`. Собирается только через SwiftPM, Xcode-проекта нет.
+- **Кросс-платформенная** (Tauri 2: Rust + HTML/JS без сборщика) в `desktop/` для macOS, Windows, Linux (RedOS). См. раздел «Desktop (Tauri)» ниже.
+
+Язык интерфейса, комментариев, README и коммитов — русский. Новая фича по умолчанию делается в обеих версиях; если делаешь только в одной — скажи об этом явно.
 
 ## Сборка и запуск
 
@@ -53,6 +58,26 @@ CI: `.github/workflows/build.yml` на `macos-15` собирает универ�
 - Окна `StatsView`, `GalleryView`, `SettingsView` создаются в `AppDelegate.show(id:…)` один раз и переиспользуются (`isReleasedWhenClosed = false`).
 
 `CatView` рисует котика в фиксированных дизайн-координатах 260×230 и масштабирует через `scaleEffect`; размер панели считается `CatView.size(for:)`. Все позиции частей — абсолютные `.position(x:y:)` в этой системе, поэтому новая деталь добавляется одной строкой в ZStack.
+
+## Desktop (Tauri)
+
+```bash
+cd desktop && npm install
+npm run dev                                   # tauri dev
+npm run build                                 # установщики в src-tauri/target/release/bundle/
+cd src-tauri && cargo check                   # быстрая проверка Rust (нужен DEVELOPER_DIR, см. выше)
+npx tauri build --debug --bundles app         # отладочный .app для запуска на этой машине
+```
+
+Архитектура повторяет нативную: `src-tauri/src/lib.rs` — команды и запуск; `actions.rs` — единая точка действий для трея, контекстного меню и команд; `input.rs` — поток `rdev::listen` (на macOS ждёт доверия через `AXIsProcessTrusted`/`CGPreflightListenEventAccess`, на Wayland без X11 сообщает, что нажатия недоступны); `stats.rs` — тот же JSON, что у Swift, включая `firstLaunch` в секундах эпохи Apple; `shots.rs` — папка, импорт с дедупликацией, миниатюры base64, захват через `xcap`; `tray.rs` — меню, оно же контекстное для котика (`menu.popup`). Скриншот области — свои окна-оверлеи `overlay-N` на каждом мониторе (`ui/overlay.html`), координаты переводятся в физические и режутся `xcap`.
+
+Интерфейс: `ui/cat-renderer.js` — SVG-котик в тех же координатах 260×230 и его характер (настроение, пузырьки), общий для окна котика и превью настроек; `ui/cat.js` — связь с Tauri (события `tap`/`tick`/`say`/`held-changed`/`settings-changed`, мышь, перетаскивание окна, drag & drop картинок внутрь и наружу через `tauri-plugin-drag`); `ui/panel.*` — вкладки статистики, галереи, настроек. Плагины доступны через `window.__TAURI__` (`withGlobalTauri`), npm-зависимость одна — CLI.
+
+Быстро посмотреть котика без Tauri: открыть страницу с `cat-renderer.js` в браузере (пример: заголовок `--allow-file-access-from-files` в headless Chrome) — рендерер не зависит от `window.__TAURI__`.
+
+Bundle id у Tauri-версии другой (`…cat-is-not-helper.desktop`), чтобы на macOS две версии не делили одну запись TCC и не сбивали друг другу доступ к клавиатуре. Пути к данным при этом общие, они заданы явно в `paths.rs`.
+
+Обновления: `tauri-plugin-updater`, публичный ключ в `tauri.conf.json`, приватный только в секретах CI. Linux из rpm/deb не самообновляется, UI открывает страницу релиза; AppImage обновляется сам.
 
 ## Коммиты
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Права окон котика, панели и оверлея скриншота",
+  "windows": ["cat", "panel", "overlay-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-outer-position",
+    "core:webview:allow-internal-toggle-devtools",
+    "opener:default",
+    "updater:default",
+    "process:default",
+    "autostart:default",
+    "drag:default"
+  ]
+}
