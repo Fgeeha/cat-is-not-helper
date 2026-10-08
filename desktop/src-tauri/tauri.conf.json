@@ -63,7 +63,14 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["app", "dmg", "nsis", "rpm", "deb", "appimage"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "rpm",
+      "deb",
+      "appimage"
+    ],
     "category": "Utility",
     "shortDescription": "Котик, который тапает вместе с тобой",
     "longDescription": "Котик сидит поверх всех окон, тапает лапками в такт нажатиям клавиш, ведёт статистику и держит скриншоты. Он не помогает. Он тапает.",
@@ -82,19 +89,30 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["Russian", "English"],
+        "languages": [
+          "Russian",
+          "English"
+        ],
         "displayLanguageSelector": false
       }
     },
     "linux": {
       "rpm": {
         "release": "1",
-        "depends": ["webkit2gtk4.1", "gtk3", "libXtst", "libXi"],
-        "desktopTemplate": "cat-is-not-helper.desktop"
+        "depends": [
+          "webkit2gtk4.1",
+          "gtk3",
+          "libXtst",
+          "libXi"
+        ]
       },
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libxtst6", "libxi6"],
-        "desktopTemplate": "cat-is-not-helper.desktop"
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libxtst6",
+          "libxi6"
+        ]
       },
       "appimage": {
         "bundleMediaFramework": false
