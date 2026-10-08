@@ -7,6 +7,7 @@
 **Котик, который сидит поверх всех окон и тапает лапками вместе с тобой.**
 Он не помогает. Он тапает.
 
+[![Страница проекта](https://img.shields.io/badge/страница-fgeeha.github.io-0d6efd)](https://fgeeha.github.io/projects/cat-is-not-helper/)
 [![Релиз](https://img.shields.io/github/v/release/Fgeeha/cat-is-not-helper?label=релиз&color=ED8C33)](https://github.com/Fgeeha/cat-is-not-helper/releases/latest)
 [![Сборка macOS](https://img.shields.io/github/actions/workflow/status/Fgeeha/cat-is-not-helper/build.yml?label=macOS%20native)](https://github.com/Fgeeha/cat-is-not-helper/actions/workflows/build.yml)
 [![Сборка Desktop](https://img.shields.io/github/actions/workflow/status/Fgeeha/cat-is-not-helper/desktop.yml?label=Tauri)](https://github.com/Fgeeha/cat-is-not-helper/actions/workflows/desktop.yml)
