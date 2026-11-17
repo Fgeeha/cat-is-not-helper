@@ -5,10 +5,11 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   const FURS = {
-    ginger: { fur: '#F2A645', belly: '#FFF2DB', stripe: '#D17824', eye: '#292421', outline: 'rgba(0,0,0,0.55)', title: 'Рыжий' },
-    gray: { fur: '#9EA3AD', belly: '#E0E3E8', stripe: '#6B707D', eye: '#292421', outline: 'rgba(0,0,0,0.55)', title: 'Серый' },
-    black: { fur: '#303038', belly: '#54545E', stripe: null, eye: '#FAC733', outline: 'rgba(255,255,255,0.55)', title: 'Чёрный' },
-    white: { fur: '#F5F2ED', belly: '#FFFFFF', stripe: null, eye: '#408CD9', outline: 'rgba(0,0,0,0.55)', title: 'Белый' },
+    // light/shade — блик и тень для объёма шерсти.
+    ginger: { fur: '#F2A645', light: '#FFD08A', shade: '#D9822B', belly: '#FFF2DB', stripe: '#D17824', eye: '#4DB366', outline: 'rgba(0,0,0,0.55)', title: 'Рыжий' },
+    gray: { fur: '#9EA3AD', light: '#C9CDD5', shade: '#7A808C', belly: '#E0E3E8', stripe: '#6B707D', eye: '#FAC733', outline: 'rgba(0,0,0,0.55)', title: 'Серый' },
+    black: { fur: '#303038', light: '#4F4F5C', shade: '#1C1C22', belly: '#54545E', stripe: null, eye: '#FAC733', outline: 'rgba(255,255,255,0.55)', title: 'Чёрный' },
+    white: { fur: '#F5F2ED', light: '#FFFFFF', shade: '#D8D1C6', belly: '#FFFFFF', stripe: null, eye: '#408CD9', outline: 'rgba(0,0,0,0.55)', title: 'Белый' },
   };
   const EYES = {
     auto: { color: null, title: 'По окрасу' },
@@ -24,10 +25,10 @@
   };
   const ACCESSORIES = { none: 'Без всего', bow: 'Бантик', glasses: 'Очки', hat: 'Шапка', scarf: 'Шарф' };
   const SIZES = [
-    { id: 's', title: 'S', scale: 0.7 },
-    { id: 'm', title: 'M', scale: 1.0 },
-    { id: 'l', title: 'L', scale: 1.4 },
-    { id: 'xl', title: 'XL', scale: 2.0 },
+    { id: 's', title: 'S', scale: 1.0 },
+    { id: 'm', title: 'M', scale: 1.4 },
+    { id: 'l', title: 'L', scale: 2.0 },
+    { id: 'xl', title: 'XL', scale: 2.8 },
   ];
   const MOODS = {
     normal: { title: 'спокойный', emoji: '😺' },
@@ -52,6 +53,17 @@
     return node;
   }
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  // Смешать два цвета #RRGGBB: t=0 — a, t=1 — b.
+  function mix(a, b, t) {
+    const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+    const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+    return `#${pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+  }
+  function stops(grad, colors) {
+    grad.replaceChildren(...colors.map(([offset, color, opacity = 1]) =>
+      el('stop', { offset, 'stop-color': color, 'stop-opacity': opacity })));
+  }
+  let instances = 0;
 
   // Клавиши ноутбука: 3 ряда по 14, 13, 12 штук.
   function buildKeys(group) {
@@ -101,6 +113,24 @@
     build() {
       const svg = el('svg', { viewBox: '0 0 260 230', class: 'cat-svg', preserveAspectRatio: 'xMidYMid meet' });
       const defs = el('defs');
+      // id градиентов уникальны на документ: в панели настроек может быть несколько котиков
+      // с разным окрасом. held-shadow общий — он у всех одинаковый.
+      const uid = `cat${++instances}`;
+      this.ids = { fur: `${uid}-fur`, belly: `${uid}-belly`, iris: `${uid}-iris`, ear: `${uid}-ear`, blush: `${uid}-blush`, laptop: `${uid}-laptop`, soft: `${uid}-soft` };
+      this.grads = {
+        fur: el('radialGradient', { id: this.ids.fur, cx: '38%', cy: '30%', r: '80%' }),
+        belly: el('radialGradient', { id: this.ids.belly, cx: '50%', cy: '35%', r: '70%' }),
+        iris: el('linearGradient', { id: this.ids.iris, x1: 0, y1: 0, x2: 0, y2: 1 }),
+        ear: el('linearGradient', { id: this.ids.ear, x1: 0, y1: 0, x2: 0, y2: 1 }),
+        blush: el('radialGradient', { id: this.ids.blush }),
+        laptop: el('linearGradient', { id: this.ids.laptop, x1: 0, y1: 0, x2: 0, y2: 1 }),
+      };
+      stops(this.grads.ear, [[0, '#FF9FB0'], [1, '#FFD3DA']]);
+      stops(this.grads.blush, [[0, '#FF7F95', 0.8], [1, '#FF7F95', 0]]);
+      defs.append(...Object.values(this.grads));
+      const soft = el('filter', { id: this.ids.soft, x: '-20%', y: '-200%', width: '140%', height: '500%' });
+      soft.appendChild(el('feGaussianBlur', { stdDeviation: 3 }));
+      defs.appendChild(soft);
       const filter = el('filter', { id: 'held-shadow', x: '-20%', y: '-20%', width: '140%', height: '140%' });
       filter.appendChild(el('feDropShadow', { dx: 0, dy: 2, stdDeviation: 3, 'flood-color': 'rgba(0,0,0,0.3)' }));
       defs.appendChild(filter);
@@ -110,24 +140,40 @@
       this.n = {};
       const n = this.n;
 
-      n.tail = el('path', { d: 'M190,185 C238,192 252,150 240,118', fill: 'none', 'stroke-width': 16, 'stroke-linecap': 'round', class: 'tail' });
+      n.shadow = el('ellipse', { cx: 130, cy: 223, rx: 96, ry: 5, fill: 'rgba(0,0,0,0.28)', filter: `url(#${this.ids.soft})` });
+      body.appendChild(n.shadow);
+
+      const tailD = 'M190,185 C238,192 252,150 240,118';
+      n.tail = el('g', { class: 'tail' });
+      n.tailFur = el('path', { d: tailD, fill: 'none', 'stroke-width': 17, 'stroke-linecap': 'round' });
+      n.tailStripes = el('path', { d: tailD, fill: 'none', 'stroke-width': 17, 'stroke-dasharray': '6 13', 'stroke-dashoffset': 5 });
+      n.tail.append(n.tailFur, n.tailStripes);
       body.appendChild(n.tail);
-      n.body = el('ellipse', { cx: 130, cy: 166, rx: 75, ry: 52.5 });
+      n.body = el('ellipse', { cx: 130, cy: 166, rx: 75, ry: 52.5, fill: `url(#${this.ids.fur})`, 'stroke-width': 1.5 });
       body.appendChild(n.body);
-      n.belly = el('ellipse', { cx: 130, cy: 180, rx: 43, ry: 32 });
+      n.bodyStripes = el('path', {
+        d: 'M60,152 Q70,150 78,158 M58,170 Q69,168 78,176 M200,152 Q190,150 182,158 M202,170 Q191,168 182,176',
+        fill: 'none', 'stroke-width': 5, 'stroke-linecap': 'round',
+      });
+      body.appendChild(n.bodyStripes);
+      n.belly = el('ellipse', { cx: 130, cy: 180, rx: 43, ry: 32, fill: `url(#${this.ids.belly})` });
       body.appendChild(n.belly);
 
       n.earL = el('g', { transform: 'translate(90,58) rotate(-14)' });
       n.earLOuter = el('path', { d: earPath(false) });
-      n.earLInner = el('path', { d: innerEarPath(false), transform: 'translate(0,9)', fill: '#FFB8C2' });
+      n.earLInner = el('path', { d: innerEarPath(false), transform: 'translate(0,9)', fill: `url(#${this.ids.ear})` });
       n.earL.append(n.earLOuter, n.earLInner);
       n.earR = el('g', { transform: 'translate(170,58) rotate(14)' });
       n.earROuter = el('path', { d: earPath(true) });
-      n.earRInner = el('path', { d: innerEarPath(true), transform: 'translate(0,9)', fill: '#FFB8C2' });
+      n.earRInner = el('path', { d: innerEarPath(true), transform: 'translate(0,9)', fill: `url(#${this.ids.ear})` });
       n.earR.append(n.earROuter, n.earRInner);
       body.append(n.earL, n.earR);
 
-      n.head = el('circle', { cx: 130, cy: 98, r: 56 });
+      // Голова — круг плюс щёки пошире внизу.
+      n.head = el('path', {
+        d: 'M130,42 C163,42 186,64 186,94 C186,100 192,108 191,114 C189,138 162,152 130,152 C98,152 71,138 69,114 C68,108 74,100 74,94 C74,64 97,42 130,42 Z',
+        fill: `url(#${this.ids.fur})`, 'stroke-width': 1.5,
+      });
       body.appendChild(n.head);
 
       n.stripes = el('g');
@@ -135,20 +181,30 @@
         el('rect', { x: 108.5, y: 47, width: 7, height: 22, rx: 3.5, transform: 'rotate(-18 112 58)' }),
         el('rect', { x: 126.5, y: 41, width: 7, height: 26, rx: 3.5 }),
         el('rect', { x: 144.5, y: 47, width: 7, height: 22, rx: 3.5, transform: 'rotate(18 148 58)' }),
+        el('path', { d: 'M71,104 L84,106 M72,113 L83,113 M189,104 L176,106 M188,113 L177,113', fill: 'none', 'stroke-width': 3.5, 'stroke-linecap': 'round', class: 'cheek-stripes' }),
       );
       body.appendChild(n.stripes);
 
-      n.muzzle = el('ellipse', { cx: 130, cy: 120, rx: 30, ry: 19 });
+      n.muzzle = el('g');
+      n.muzzle.append(
+        el('ellipse', { cx: 119, cy: 121, rx: 17, ry: 14 }),
+        el('ellipse', { cx: 141, cy: 121, rx: 17, ry: 14 }),
+        el('ellipse', { cx: 130, cy: 128, rx: 10, ry: 8 }),
+      );
       body.appendChild(n.muzzle);
-      n.cheeks = el('g', { fill: '#FF99A6', opacity: 0.45 });
-      n.cheeks.append(el('circle', { cx: 94, cy: 112, r: 8 }), el('circle', { cx: 166, cy: 112, r: 8 }));
+      n.cheeks = el('g', { fill: `url(#${this.ids.blush})` });
+      n.cheeks.append(el('ellipse', { cx: 92, cy: 116, rx: 12, ry: 8 }), el('ellipse', { cx: 168, cy: 116, rx: 12, ry: 8 }));
       body.appendChild(n.cheeks);
 
-      n.eyeL = this.buildEye(108);
-      n.eyeR = this.buildEye(152);
+      n.eyeL = this.buildEye(108, false);
+      n.eyeR = this.buildEye(152, true);
       body.append(n.eyeL.g, n.eyeR.g);
 
-      n.nose = el('path', { d: 'M124,108 L136,108 Q136,116 130,116 Q124,116 124,108 Z', fill: '#F28C99' });
+      n.nose = el('g');
+      n.nose.append(
+        el('path', { d: 'M123.5,108 Q130,105.5 136.5,108 Q136,115 130,117 Q124,115 123.5,108 Z', fill: '#F28C99' }),
+        el('ellipse', { cx: 128, cy: 109, rx: 2.4, ry: 1.3, fill: '#FFFFFF', opacity: 0.6 }),
+      );
       body.appendChild(n.nose);
       n.mouthNormal = el('path', { d: 'M120,117 Q125,127 130,119 Q135,127 140,117', fill: 'none', 'stroke-width': 1.8, 'stroke-linecap': 'round' });
       n.mouthSad = el('path', { d: 'M120,127 Q130,115 140,127', fill: 'none', 'stroke-width': 1.8, 'stroke-linecap': 'round' });
@@ -187,10 +243,11 @@
       body.append(n.bow, n.glasses, n.hat, n.scarf);
 
       // Ноутбук
-      n.laptop = el('rect', { x: 38, y: 191, width: 184, height: 34, rx: 6 });
+      n.laptop = el('rect', { x: 38, y: 191, width: 184, height: 34, rx: 6, fill: `url(#${this.ids.laptop})` });
+      n.laptopEdge = el('rect', { x: 44, y: 191.5, width: 172, height: 1.5, rx: 0.75, fill: '#FFFFFF', opacity: 0.25 });
       n.keys = el('g');
       buildKeys(n.keys);
-      body.append(n.laptop, n.keys);
+      body.append(n.laptop, n.laptopEdge, n.keys);
 
       // Картинка в лапках
       n.held = el('g', { transform: 'translate(130,164) rotate(-3)', class: 'held' });
@@ -240,17 +297,23 @@
       this.container.appendChild(this.bubble);
     }
 
-    buildEye(cx) {
+    buildEye(cx, right) {
       const g = el('g', { transform: `translate(${cx},96)` });
       const normal = el('g');
-      const pupil = el('ellipse', { cx: 0, cy: 0, rx: 7, ry: 9 });
-      const shine = el('circle', { cx: 3, cy: -4, r: 2.5, fill: '#FFFFFF' });
-      normal.append(pupil, shine);
-      const lid = el('rect', { x: -9, y: -16, width: 18, height: 9 });
+      const iris = el('ellipse', { cx: 0, cy: 0, rx: 8.5, ry: 10, fill: `url(#${this.ids.iris})`, stroke: 'rgba(0,0,0,0.35)', 'stroke-width': 1 });
+      const pupil = el('ellipse', { cx: 0, cy: 0.5, rx: 4.5, ry: 7.5, fill: '#1A1414' });
+      const shine = el('circle', { cx: 3, cy: -4.5, r: 2.8, fill: '#FFFFFF' });
+      const shine2 = el('circle', { cx: -3, cy: 4.5, r: 1.3, fill: '#FFFFFF', opacity: 0.8 });
+      normal.append(iris, pupil, shine, shine2);
+      // Хмурое веко: прикрывает верх глаза, у переносицы опущено ниже.
+      const lid = el('g', { transform: right ? 'scale(-1,1)' : null });
+      const lidFill = el('path', { d: 'M-10,-6 L10,-2 L10,-12 Q0,-15 -10,-12 Z' });
+      const lidLine = el('path', { d: 'M-10,-6 L10,-2', 'stroke-width': 2, 'stroke-linecap': 'round' });
+      lid.append(lidFill, lidLine);
       const happy = el('path', { d: 'M-8,4 Q0,-9 8,4', fill: 'none', 'stroke-width': 3, 'stroke-linecap': 'round' });
       const closed = el('rect', { x: -8, y: -1.5, width: 16, height: 3, rx: 1.5 });
       g.append(normal, lid, happy, closed);
-      return { g, normal, pupil, lid, happy, closed };
+      return { g, normal, iris, pupil, lid, lidFill, lidLine, happy, closed };
     }
 
     buildPaw() {
@@ -272,20 +335,32 @@
       const kb = KEYBOARDS[this.settings.keyboard] || KEYBOARDS.dark;
       this.palette = { fur, eye, kb };
 
-      n.tail.setAttribute('stroke', fur.fur);
-      n.body.setAttribute('fill', fur.fur);
-      n.head.setAttribute('fill', fur.fur);
-      n.earLOuter.setAttribute('fill', fur.fur);
-      n.earROuter.setAttribute('fill', fur.fur);
-      n.belly.setAttribute('fill', fur.belly);
-      n.muzzle.setAttribute('fill', fur.belly);
-      n.stripes.style.display = fur.stripe ? '' : 'none';
-      if (fur.stripe) n.stripes.setAttribute('fill', fur.stripe);
+      stops(this.grads.fur, [[0, fur.light], [0.55, fur.fur], [1, fur.shade]]);
+      stops(this.grads.belly, [[0, mix(fur.belly, '#FFFFFF', 0.4)], [1, fur.belly]]);
+      stops(this.grads.iris, [[0, mix(eye, '#000000', 0.35)], [0.6, eye], [1, mix(eye, '#FFFFFF', 0.35)]]);
+      stops(this.grads.laptop, [[0, mix(kb.base, '#FFFFFF', 0.12)], [1, mix(kb.base, '#000000', 0.15)]]);
+      n.tailFur.setAttribute('stroke', fur.fur);
+      for (const part of [n.body, n.head]) part.setAttribute('stroke', fur.shade);
+      for (const ear of [n.earLOuter, n.earROuter]) {
+        ear.setAttribute('fill', `url(#${this.ids.fur})`);
+        ear.setAttribute('stroke', fur.shade);
+        ear.setAttribute('stroke-width', 1.5);
+      }
+      n.muzzle.setAttribute('fill', mix(fur.belly, '#FFFFFF', 0.3));
+      for (const part of [n.stripes, n.bodyStripes, n.tailStripes]) part.style.display = fur.stripe ? '' : 'none';
+      if (fur.stripe) {
+        n.stripes.setAttribute('fill', fur.stripe);
+        n.stripes.querySelector('.cheek-stripes').setAttribute('stroke', fur.stripe);
+        n.bodyStripes.setAttribute('stroke', fur.stripe);
+        n.tailStripes.setAttribute('stroke', fur.stripe);
+      }
+      // Закрытые глаза — тёмная линия, на чёрной шерсти — цветом глаз, иначе не видно.
+      const lash = this.settings.fur === 'black' ? eye : mix(eye, '#000000', 0.6);
       for (const eyeNode of [n.eyeL, n.eyeR]) {
-        eyeNode.pupil.setAttribute('fill', eye);
-        eyeNode.happy.setAttribute('stroke', eye);
-        eyeNode.closed.setAttribute('fill', eye);
-        eyeNode.lid.setAttribute('fill', fur.fur);
+        eyeNode.happy.setAttribute('stroke', lash);
+        eyeNode.closed.setAttribute('fill', lash);
+        eyeNode.lidFill.setAttribute('fill', fur.fur);
+        eyeNode.lidLine.setAttribute('stroke', lash);
       }
       n.mouthNormal.setAttribute('stroke', fur.outline);
       n.mouthSad.setAttribute('stroke', fur.outline);
@@ -442,7 +517,7 @@
       const n = this.n;
       const s = this.state;
       const happy = s.mood === 'happy' || s.eating;
-      n.cheeks.style.display = happy ? '' : 'none';
+      n.cheeks.setAttribute('opacity', happy ? 0.9 : 0.35);
       const open = s.eating || s.mood === 'excited';
       n.mouthOpen.style.display = open ? '' : 'none';
       n.mouthSad.style.display = !open && s.mood === 'grumpy' ? '' : 'none';
@@ -463,7 +538,10 @@
         eye.happy.style.display = happy ? '' : 'none';
         eye.normal.style.display = normal ? '' : 'none';
         eye.lid.style.display = normal && s.mood === 'grumpy' ? '' : 'none';
-        eye.pupil.setAttribute('ry', s.mood === 'excited' ? 10.5 : 9);
+        const excited = s.mood === 'excited';
+        eye.iris.setAttribute('ry', excited ? 11 : 10);
+        eye.pupil.setAttribute('rx', excited ? 6.5 : 4.5);
+        eye.pupil.setAttribute('ry', excited ? 8.5 : 7.5);
       }
     }
 

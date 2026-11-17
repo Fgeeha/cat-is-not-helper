@@ -24,6 +24,25 @@ enum FurStyle: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Блик и тень шерсти — для объёма.
+    var light: Color {
+        switch self {
+        case .ginger: return Color(red: 1.0, green: 0.82, blue: 0.54)
+        case .gray: return Color(red: 0.79, green: 0.8, blue: 0.84)
+        case .black: return Color(red: 0.31, green: 0.31, blue: 0.36)
+        case .white: return Color.white
+        }
+    }
+
+    var shade: Color {
+        switch self {
+        case .ginger: return Color(red: 0.85, green: 0.51, blue: 0.17)
+        case .gray: return Color(red: 0.48, green: 0.5, blue: 0.55)
+        case .black: return Color(red: 0.11, green: 0.11, blue: 0.13)
+        case .white: return Color(red: 0.85, green: 0.82, blue: 0.78)
+        }
+    }
+
     var belly: Color {
         switch self {
         case .ginger: return Color(red: 1.0, green: 0.95, blue: 0.86)
@@ -43,9 +62,9 @@ enum FurStyle: String, CaseIterable, Identifiable {
 
     var eye: Color {
         switch self {
-        case .black: return Color(red: 0.98, green: 0.78, blue: 0.2)
+        case .ginger: return Color(red: 0.3, green: 0.7, blue: 0.4)
+        case .gray, .black: return Color(red: 0.98, green: 0.78, blue: 0.2)
         case .white: return Color(red: 0.25, green: 0.55, blue: 0.85)
-        default: return Color(red: 0.16, green: 0.14, blue: 0.13)
         }
     }
 
@@ -134,10 +153,10 @@ enum SizePreset: String, CaseIterable, Identifiable {
 
     var scale: Double {
         switch self {
-        case .s: return 0.7
-        case .m: return 1.0
-        case .l: return 1.4
-        case .xl: return 2.0
+        case .s: return 1.0
+        case .m: return 1.4
+        case .l: return 2.0
+        case .xl: return 2.8
         }
     }
 
@@ -150,7 +169,7 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
     private let ud = UserDefaults.standard
 
-    static let scaleRange = 0.5...2.5
+    static let scaleRange = 0.7...3.0
 
     @Published var scale: Double { didSet { ud.set(scale, forKey: "scale") } }
     @Published var opacity: Double { didSet { ud.set(opacity, forKey: "opacity") } }
@@ -167,7 +186,11 @@ final class AppSettings: ObservableObject {
 
     private init() {
         checkUpdates = ud.object(forKey: "checkUpdates") as? Bool ?? true
-        scale = ud.object(forKey: "scale") as? Double ?? 1.0
+        var savedScale = ud.object(forKey: "scale") as? Double ?? 1.4
+        // Пресеты выросли в 1.4 раза: старый сохранённый масштаб пересчитываем один раз.
+        if ud.object(forKey: "scale") != nil, !ud.bool(forKey: "sizeV2") { savedScale *= 1.4 }
+        ud.set(true, forKey: "sizeV2")
+        scale = min(max(savedScale, Self.scaleRange.lowerBound), Self.scaleRange.upperBound)
         opacity = ud.object(forKey: "opacity") as? Double ?? 1.0
         fur = FurStyle(rawValue: ud.string(forKey: "fur") ?? "") ?? .ginger
         accessory = Accessory(rawValue: ud.string(forKey: "accessory") ?? "") ?? .none
