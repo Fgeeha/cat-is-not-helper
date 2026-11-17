@@ -20,17 +20,14 @@ struct CatView: View {
     private var holding: Bool { state.heldImage != nil }
     private var scale: Double { fixedScale ?? settings.scale }
     private var eyeColor: Color { settings.eyeColor.color ?? fur.eye }
+    /// Закрытые глаза — тёмная линия; на чёрной шерсти цветом глаз, иначе не видно.
+    private var lashColor: Color { fur == .black ? eyeColor : eyeColor.mixed(with: .black, by: 0.6) }
 
     var body: some View {
         ZStack {
             // Тело и всё, что можно отразить
             ZStack {
-                tail
-                Ellipse().fill(fur.fur).frame(width: 150, height: 105).position(x: 130, y: 166)
-                Ellipse().fill(fur.belly).frame(width: 86, height: 64).position(x: 130, y: 180)
-                ears
-                Circle().fill(fur.fur).frame(width: 112, height: 112).position(x: 130, y: 98)
-                stripes
+                torso
                 face
                 accessoryBehindPaws
                 laptop
@@ -49,6 +46,42 @@ struct CatView: View {
         .scaleEffect(scale)
         .frame(width: Self.design.width * scale, height: Self.design.height * scale)
         .opacity(fixedScale == nil ? settings.opacity : 1)
+    }
+
+    /// Тень, хвост, тело, уши, голова и полоски — всё, что под мордочкой.
+    private var torso: some View {
+        ZStack {
+            Ellipse().fill(Color.black.opacity(0.28)).frame(width: 192, height: 10).blur(radius: 3).position(x: 130, y: 223)
+            tail
+            Ellipse()
+                .fill(furGradient(endRadius: 104))
+                .overlay(Ellipse().stroke(fur.shade, lineWidth: 1.5))
+                .frame(width: 150, height: 105)
+                .position(x: 130, y: 166)
+            if let c = fur.stripe {
+                BodyStripesShape().stroke(c, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            }
+            Ellipse()
+                .fill(RadialGradient(colors: [fur.belly.mixed(with: .white, by: 0.4), fur.belly],
+                                     center: UnitPoint(x: 0.5, y: 0.35), startRadius: 0, endRadius: 50))
+                .frame(width: 86, height: 64)
+                .position(x: 130, y: 180)
+            ears
+            // Голова в координатах всего холста, поэтому центр градиента пересчитан из её рамки 69…191 × 42…152.
+            HeadShape()
+                .fill(RadialGradient(gradient: furStops, center: UnitPoint(x: 115 / 260, y: 75 / 230), startRadius: 0, endRadius: 94))
+                .overlay(HeadShape().stroke(fur.shade, lineWidth: 1.5))
+            stripes
+        }
+    }
+
+    /// Те же точки перехода, что у SVG-градиента шерсти в cat-renderer.js.
+    private var furStops: Gradient {
+        Gradient(stops: [.init(color: fur.light, location: 0), .init(color: fur.fur, location: 0.55), .init(color: fur.shade, location: 1)])
+    }
+
+    private func furGradient(endRadius: CGFloat) -> RadialGradient {
+        RadialGradient(gradient: furStops, center: UnitPoint(x: 0.38, y: 0.3), startRadius: 0, endRadius: endRadius)
     }
 
     // MARK: - Аксессуары
@@ -85,8 +118,12 @@ struct CatView: View {
 
     private var tail: some View {
         let happy = state.mood == .happy || state.mood == .excited
-        return TailShape()
-            .stroke(fur.fur, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+        return ZStack {
+            TailShape().stroke(fur.fur, style: StrokeStyle(lineWidth: 17, lineCap: .round))
+            if let c = fur.stripe {
+                TailShape().stroke(c, style: StrokeStyle(lineWidth: 17, lineCap: .butt, dash: [6, 13], dashPhase: 5))
+            }
+        }
             .rotationEffect(.degrees(happy ? 12 : 0), anchor: UnitPoint(x: 190 / 260, y: 185 / 230))
             .animation(happy ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true)
                              : .easeInOut(duration: 0.4), value: happy)
@@ -94,9 +131,13 @@ struct CatView: View {
 
     private func ear(mirrored: Bool) -> some View {
         ZStack {
-            EarShape(mirrored: mirrored).fill(fur.fur).frame(width: 44, height: 50)
             EarShape(mirrored: mirrored)
-                .fill(Color(red: 1, green: 0.72, blue: 0.76))
+                .fill(furGradient(endRadius: 40))
+                .overlay(EarShape(mirrored: mirrored).stroke(fur.shade, lineWidth: 1.5))
+                .frame(width: 44, height: 50)
+            EarShape(mirrored: mirrored)
+                .fill(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.69), Color(red: 1, green: 0.83, blue: 0.85)],
+                                     startPoint: .top, endPoint: .bottom))
                 .frame(width: 24, height: 28)
                 .offset(y: 9)
         }
@@ -116,20 +157,29 @@ struct CatView: View {
                 Capsule().fill(c).frame(width: 7, height: 22).rotationEffect(.degrees(-18)).position(x: 112, y: 58)
                 Capsule().fill(c).frame(width: 7, height: 26).position(x: 130, y: 54)
                 Capsule().fill(c).frame(width: 7, height: 22).rotationEffect(.degrees(18)).position(x: 148, y: 58)
+                CheekStripesShape().stroke(c, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
             }
         }
     }
 
     private var face: some View {
         Group {
-            Ellipse().fill(fur.belly).frame(width: 60, height: 38).position(x: 130, y: 120)
-            if state.mood == .happy || state.eating {
-                Circle().fill(Color(red: 1, green: 0.6, blue: 0.65).opacity(0.45)).frame(width: 16).position(x: 94, y: 112)
-                Circle().fill(Color(red: 1, green: 0.6, blue: 0.65).opacity(0.45)).frame(width: 16).position(x: 166, y: 112)
+            let muzzle = fur.belly.mixed(with: .white, by: 0.3)
+            Ellipse().fill(muzzle).frame(width: 34, height: 28).position(x: 119, y: 121)
+            Ellipse().fill(muzzle).frame(width: 34, height: 28).position(x: 141, y: 121)
+            Ellipse().fill(muzzle).frame(width: 20, height: 16).position(x: 130, y: 128)
+            let blush = Color(red: 1, green: 0.5, blue: 0.58)
+            ForEach([92.0, 168.0], id: \.self) { x in
+                Ellipse()
+                    .fill(RadialGradient(colors: [blush.opacity(0.8), blush.opacity(0)], center: .center, startRadius: 0, endRadius: 12))
+                    .frame(width: 24, height: 16)
+                    .position(x: x, y: 116)
             }
-            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur).position(x: 108, y: 96)
-            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur).position(x: 152, y: 96)
-            NoseShape().fill(Color(red: 0.95, green: 0.55, blue: 0.6)).frame(width: 12, height: 8).position(x: 130, y: 112)
+            .opacity(state.mood == .happy || state.eating ? 0.9 : 0.35)
+            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur, lash: lashColor, right: false).position(x: 108, y: 96)
+            EyeView(mood: state.mood, blinking: state.blinking, color: eyeColor, lid: fur.fur, lash: lashColor, right: true).position(x: 152, y: 96)
+            NoseShape().fill(Color(red: 0.95, green: 0.55, blue: 0.6))
+            Ellipse().fill(Color.white.opacity(0.6)).frame(width: 4.8, height: 2.6).position(x: 128, y: 109)
             mouth
             WhiskerShape().stroke(fur.outline, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
@@ -148,7 +198,12 @@ struct CatView: View {
 
     private var laptop: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(settings.keyboard.base).frame(width: 184, height: 34)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(LinearGradient(colors: [settings.keyboard.base.mixed(with: .white, by: 0.12),
+                                              settings.keyboard.base.mixed(with: .black, by: 0.15)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: 184, height: 34)
+            Capsule().fill(Color.white.opacity(0.25)).frame(width: 172, height: 1.5).offset(y: -15.5)
             VStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { row in
                     HStack(spacing: 3) {
@@ -267,26 +322,50 @@ struct EyeView: View {
     let blinking: Bool
     let color: Color
     let lid: Color
+    let lash: Color
+    let right: Bool
 
     var body: some View {
         Group {
             if blinking || mood == .sleepy {
-                Capsule().fill(color).frame(width: 16, height: 3)
+                Capsule().fill(lash).frame(width: 16, height: 3)
             } else if mood == .happy {
                 HappyEyeShape()
-                    .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .stroke(lash, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .frame(width: 16, height: 9)
-            } else if mood == .grumpy {
-                ZStack {
-                    Ellipse().fill(color).frame(width: 14, height: 18)
-                    Rectangle().fill(lid).frame(width: 18, height: 9).offset(y: -7)
-                }
             } else {
                 ZStack {
-                    Ellipse().fill(color).frame(width: 14, height: mood == .excited ? 21 : 18)
-                    Circle().fill(.white).frame(width: 5).offset(x: 3, y: -4)
+                    openEye
+                    if mood == .grumpy {
+                        // Хмурое веко наискосок к переносице.
+                        ZStack {
+                            LidShape().fill(lid)
+                            LidLineShape().stroke(lash, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        }
+                        .frame(width: 24, height: 24)
+                        .scaleEffect(x: right ? -1 : 1, y: 1)
+                    }
                 }
             }
+        }
+    }
+
+    private var openEye: some View {
+        let excited = mood == .excited
+        return ZStack {
+            Ellipse()
+                .fill(LinearGradient(stops: [.init(color: color.mixed(with: .black, by: 0.35), location: 0),
+                                             .init(color: color, location: 0.6),
+                                             .init(color: color.mixed(with: .white, by: 0.35), location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .overlay(Ellipse().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .frame(width: 17, height: excited ? 22 : 20)
+            Ellipse()
+                .fill(Color(red: 0.1, green: 0.08, blue: 0.08))
+                .frame(width: excited ? 13 : 9, height: excited ? 17 : 15)
+                .offset(y: 0.5)
+            Circle().fill(.white).frame(width: 5.6).offset(x: 3, y: -4.5)
+            Circle().fill(Color.white.opacity(0.8)).frame(width: 2.6).offset(x: -3, y: 4.5)
         }
     }
 }
@@ -301,6 +380,86 @@ struct TailShape: Shape {
                    control1: CGPoint(x: 238, y: 192),
                    control2: CGPoint(x: 252, y: 150))
         return p
+    }
+}
+
+/// Голова в координатах холста 260×230: круг, расширенный щеками книзу.
+struct HeadShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 130, y: 42))
+        p.addCurve(to: CGPoint(x: 186, y: 94), control1: CGPoint(x: 163, y: 42), control2: CGPoint(x: 186, y: 64))
+        p.addCurve(to: CGPoint(x: 191, y: 114), control1: CGPoint(x: 186, y: 100), control2: CGPoint(x: 192, y: 108))
+        p.addCurve(to: CGPoint(x: 130, y: 152), control1: CGPoint(x: 189, y: 138), control2: CGPoint(x: 162, y: 152))
+        p.addCurve(to: CGPoint(x: 69, y: 114), control1: CGPoint(x: 98, y: 152), control2: CGPoint(x: 71, y: 138))
+        p.addCurve(to: CGPoint(x: 74, y: 94), control1: CGPoint(x: 68, y: 108), control2: CGPoint(x: 74, y: 100))
+        p.addCurve(to: CGPoint(x: 130, y: 42), control1: CGPoint(x: 74, y: 64), control2: CGPoint(x: 97, y: 42))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Полоски на боках тела (координаты холста).
+struct BodyStripesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        for (a, c, b) in [((60.0, 152.0), (70.0, 150.0), (78.0, 158.0)), ((58.0, 170.0), (69.0, 168.0), (78.0, 176.0))] {
+            for mirror in [false, true] {
+                let x = { (v: Double) in mirror ? 260 - v : v }
+                p.move(to: CGPoint(x: x(a.0), y: a.1))
+                p.addQuadCurve(to: CGPoint(x: x(b.0), y: b.1), control: CGPoint(x: x(c.0), y: c.1))
+            }
+        }
+        return p
+    }
+}
+
+/// Полоски на щеках (координаты холста).
+struct CheekStripesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        for (a, b) in [((71.0, 104.0), (84.0, 106.0)), ((72.0, 113.0), (83.0, 113.0))] {
+            p.move(to: CGPoint(x: a.0, y: a.1)); p.addLine(to: CGPoint(x: b.0, y: b.1))
+            p.move(to: CGPoint(x: 260 - a.0, y: a.1)); p.addLine(to: CGPoint(x: 260 - b.0, y: b.1))
+        }
+        return p
+    }
+}
+
+/// Хмурое веко в рамке 24×24 с центром глаза посередине (как SVG-путь M-10,-6 L10,-2 L10,-12 Q0,-15 -10,-12 Z):
+/// у переносицы (+x для левого глаза) опущено ниже — сердитый, а не грустный взгляд.
+struct LidShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let o = CGPoint(x: rect.midX, y: rect.midY)
+        var p = Path()
+        p.move(to: CGPoint(x: o.x - 10, y: o.y - 6))
+        p.addLine(to: CGPoint(x: o.x + 10, y: o.y - 2))
+        p.addLine(to: CGPoint(x: o.x + 10, y: o.y - 12))
+        p.addQuadCurve(to: CGPoint(x: o.x - 10, y: o.y - 12), control: CGPoint(x: o.x, y: o.y - 15))
+        p.closeSubpath()
+        return p
+    }
+}
+
+struct LidLineShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.midX - 10, y: rect.midY - 6))
+        p.addLine(to: CGPoint(x: rect.midX + 10, y: rect.midY - 2))
+        return p
+    }
+}
+
+extension Color {
+    /// Смешать с другим цветом: t=0 — исходный, t=1 — other.
+    func mixed(with other: Color, by t: Double) -> Color {
+        guard let a = NSColor(self).usingColorSpace(.sRGB), let b = NSColor(other).usingColorSpace(.sRGB) else { return self }
+        let f = { (x: CGFloat, y: CGFloat) in Double(x + (y - x) * t) }
+        return Color(.sRGB,
+                     red: f(a.redComponent, b.redComponent),
+                     green: f(a.greenComponent, b.greenComponent),
+                     blue: f(a.blueComponent, b.blueComponent),
+                     opacity: f(a.alphaComponent, b.alphaComponent))
     }
 }
 
@@ -319,13 +478,15 @@ struct EarShape: Shape {
     }
 }
 
+/// Нос в координатах холста, как SVG-путь в cat-renderer.js.
 struct NoseShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addQuadCurve(to: CGPoint(x: rect.midX, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.move(to: CGPoint(x: 123.5, y: 108))
+        p.addQuadCurve(to: CGPoint(x: 136.5, y: 108), control: CGPoint(x: 130, y: 105.5))
+        p.addQuadCurve(to: CGPoint(x: 130, y: 117), control: CGPoint(x: 136, y: 115))
+        p.addQuadCurve(to: CGPoint(x: 123.5, y: 108), control: CGPoint(x: 124, y: 115))
+        p.closeSubpath()
         return p
     }
 }

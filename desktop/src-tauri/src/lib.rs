@@ -64,9 +64,10 @@ fn get_settings(state: tauri::State<AppState>) -> Settings {
 #[tauri::command]
 fn set_settings(app: AppHandle, settings: Settings) {
     actions::update_settings(&app, |current| {
-        let position = current.position;
+        let (position, size_v2) = (current.position, current.size_v2);
         *current = settings;
         current.position = position;
+        current.size_v2 = size_v2;
     });
 }
 

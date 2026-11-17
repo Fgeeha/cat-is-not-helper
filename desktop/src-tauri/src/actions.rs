@@ -235,8 +235,7 @@ pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut Settings)) {
         let state = app.state::<AppState>();
         let mut settings = state.settings.lock();
         change(&mut settings);
-        settings.scale = settings.scale.clamp(0.5, 2.5);
-        settings.opacity = settings.opacity.clamp(0.3, 1.0);
+        settings.clamp();
         settings.save();
         settings.clone()
     };
@@ -249,6 +248,7 @@ pub fn apply_settings(app: &AppHandle, settings: &Settings) {
     if let Some(cat) = app.get_webview_window("cat") {
         let (w, h) = settings.window_size();
         resize_cat(&cat, w, h);
+        keep_on_screen(&cat);
         let _ = cat.set_always_on_top(settings.always_on_top);
         let _ = cat.set_visible_on_all_workspaces(settings.all_spaces);
         if settings.cat_visible {
@@ -280,6 +280,21 @@ fn resize_cat(cat: &tauri::WebviewWindow, w: f64, h: f64) {
     }
 }
 
+/// Сдвинуть котика внутрь рабочей области его монитора: после увеличения
+/// он мог уехать за край экрана.
+fn keep_on_screen(cat: &tauri::WebviewWindow) {
+    let (Ok(pos), Ok(size), Ok(Some(monitor))) = (cat.outer_position(), cat.outer_size(), cat.current_monitor()) else { return };
+    let area = monitor.work_area();
+    let (min_x, min_y) = (area.position.x, area.position.y);
+    let max_x = min_x + area.size.width as i32 - size.width as i32;
+    let max_y = min_y + area.size.height as i32 - size.height as i32;
+    let x = pos.x.min(max_x).max(min_x);
+    let y = pos.y.min(max_y).max(min_y);
+    if (x, y) != (pos.x, pos.y) {
+        let _ = cat.set_position(Position::Physical(PhysicalPosition::new(x, y)));
+    }
+}
+
 pub fn toggle_cat(app: &AppHandle) {
     update_settings(app, |s| s.cat_visible = !s.cat_visible);
 }
@@ -298,6 +313,7 @@ pub fn place_cat(app: &AppHandle) {
 
     if let Some((x, y)) = settings.position {
         let _ = cat.set_position(Position::Physical(PhysicalPosition::new(x, y)));
+        keep_on_screen(&cat);
     } else if let Ok(Some(monitor)) = app.primary_monitor() {
         let sf = monitor.scale_factor();
         let area = monitor.work_area();

@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::{actions, AppState};
 
-pub const SIZES: &[(&str, f64)] = &[("S", 0.7), ("M", 1.0), ("L", 1.4), ("XL", 2.0)];
+pub const SIZES: &[(&str, f64)] = &[("S", 1.0), ("M", 1.4), ("L", 2.0), ("XL", 2.8)];
 pub const FURS: &[(&str, &str)] = &[("ginger", "Рыжий"), ("gray", "Серый"), ("black", "Чёрный"), ("white", "Белый")];
 
 pub struct TrayMenu {
