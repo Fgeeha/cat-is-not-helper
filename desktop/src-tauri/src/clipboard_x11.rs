@@ -143,15 +143,21 @@ fn serve(rx: mpsc::Receiver<Content>) {
     }
 }
 
+/// file:// URI с процентным кодированием: пробелы и кириллица в сыром виде
+/// ломают разбор uri-list у части программ.
+fn file_uri(path: &str) -> String {
+    url::Url::from_file_path(path).map(String::from).unwrap_or_else(|_| format!("file://{path}"))
+}
+
 fn uri_list(paths: &[String]) -> Vec<u8> {
-    paths.iter().map(|p| format!("file://{p}\r\n")).collect::<String>().into_bytes()
+    paths.iter().map(|p| format!("{}\r\n", file_uri(p))).collect::<String>().into_bytes()
 }
 
 fn gnome_files(paths: &[String]) -> Vec<u8> {
     let mut s = String::from("copy");
     for p in paths {
         s.push('\n');
-        s.push_str(&format!("file://{p}"));
+        s.push_str(&file_uri(p));
     }
     s.into_bytes()
 }
@@ -230,4 +236,13 @@ fn handle_request<C: Connection>(conn: &C, atoms: &Atoms, content: &Content, req
     let _ = conn.send_event(false, req.requestor, EventMask::NO_EVENT, notify);
     let _ = conn.flush();
     let _ = atoms.incr;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn uri_escapes_spaces_and_cyrillic() {
+        let list = String::from_utf8(super::uri_list(&["/home/u/Изображения/отчёт за год.txt".into()])).unwrap();
+        assert_eq!(list, "file:///home/u/%D0%98%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D1%8F/%D0%BE%D1%82%D1%87%D1%91%D1%82%20%D0%B7%D0%B0%20%D0%B3%D0%BE%D0%B4.txt\r\n");
+    }
 }

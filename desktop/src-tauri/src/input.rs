@@ -99,12 +99,17 @@ pub fn request_access() {
     }
 }
 
+/// Сессия Wayland (с Xwayland или без).
+#[cfg(target_os = "linux")]
+pub fn is_wayland() -> bool {
+    std::env::var("XDG_SESSION_TYPE").map(|v| v == "wayland").unwrap_or(false)
+        || std::env::var_os("WAYLAND_DISPLAY").is_some()
+}
+
 /// Wayland без X11 не даёт слушать клавиатуру глобально.
 #[cfg(target_os = "linux")]
 pub fn is_wayland_only() -> bool {
-    let wayland = std::env::var("XDG_SESSION_TYPE").map(|v| v == "wayland").unwrap_or(false)
-        || std::env::var("WAYLAND_DISPLAY").is_ok();
-    wayland && std::env::var("DISPLAY").is_err()
+    is_wayland() && std::env::var_os("DISPLAY").is_none()
 }
 
 /// Что сказать пользователю, если доступа нет.

@@ -3,6 +3,8 @@
 mod actions;
 #[cfg(target_os = "linux")]
 mod clipboard_x11;
+#[cfg(target_os = "linux")]
+mod drag_out;
 mod input;
 mod paths;
 mod settings;
@@ -131,6 +133,17 @@ fn copy_held(app: AppHandle) {
     actions::copy_held(&app);
 }
 
+/// Перетащить файл из лапок наружу (Linux). Итог — событие `drag-out-finished`.
+#[tauri::command]
+fn drag_out(app: AppHandle, path: String) {
+    #[cfg(target_os = "linux")]
+    drag_out::start(&app, PathBuf::from(path));
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (path, app.emit("drag-out-finished", false));
+    }
+}
+
 #[tauri::command]
 fn delete_shot(app: AppHandle, path: String) -> bool {
     let target = PathBuf::from(&path);
@@ -167,8 +180,9 @@ fn start_capture(app: AppHandle) {
 }
 
 #[tauri::command]
-fn finish_capture(app: AppHandle, label: String, x: f64, y: f64, width: f64, height: f64) {
-    actions::finish_capture(&app, &label, x, y, width, height);
+#[allow(clippy::too_many_arguments)]
+fn finish_capture(app: AppHandle, label: String, x: f64, y: f64, width: f64, height: f64, view_width: f64, view_height: f64) {
+    actions::finish_capture(&app, &label, (x, y, width, height), (view_width, view_height));
 }
 
 #[tauri::command]
@@ -254,6 +268,13 @@ fn quit(app: AppHandle) {
 // MARK: - Запуск
 
 pub fn run() {
+    // В сессии Wayland окно котика не может само встать в угол, остаться поверх
+    // всех окон и двигаться за мышью — всё это есть только у X11-окон. Поэтому
+    // при доступном Xwayland запускаем GTK через него. Вызов до старта потоков.
+    #[cfg(target_os = "linux")]
+    if input::is_wayland() && std::env::var_os("DISPLAY").is_some() && std::env::var_os("GDK_BACKEND").is_none() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -339,6 +360,7 @@ pub fn run() {
             get_held,
             open_held,
             copy_held,
+            drag_out,
             delete_shot,
             reveal_shot,
             open_shot,
