@@ -145,8 +145,15 @@ fn refresh_now(app: &AppHandle) {
 
     let needs_access = !crate::input::is_trusted();
     let _ = tray.access.set_enabled(needs_access);
+    #[cfg(target_os = "linux")]
+    let partial = crate::input::is_wayland();
+    #[cfg(not(target_os = "linux"))]
+    let partial = false;
     let _ = tray.access.set_text(if needs_access {
         "⚠️ Дать доступ к клавиатуре…"
+    } else if partial {
+        // Через Xwayland видны только нажатия в X11-программах.
+        "⚠️ Wayland: вижу нажатия не во всех окнах"
     } else {
         "✓ Клавиатуру вижу"
     });

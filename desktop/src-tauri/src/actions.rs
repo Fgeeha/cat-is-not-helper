@@ -311,7 +311,24 @@ pub fn place_cat(app: &AppHandle) {
     let (w, h) = settings.window_size();
     resize_cat(&cat, w, h);
 
-    if let Some((x, y)) = settings.position {
+    // Сохранённая позиция годится, только если угол окна на каком-то экране:
+    // монитор могли отключить. На Linux сверяем с рабочей областью: старые
+    // версии под Wayland сохраняли (0, 0), а там обычно панель.
+    let on_screen = |x: i32, y: i32| {
+        app.available_monitors().map_or(true, |monitors| {
+            monitors.iter().any(|m| {
+                #[cfg(target_os = "linux")]
+                let a = *m.work_area();
+                #[cfg(not(target_os = "linux"))]
+                let a = tauri::PhysicalRect { position: *m.position(), size: *m.size() };
+                x >= a.position.x
+                    && y >= a.position.y
+                    && x < a.position.x + a.size.width as i32
+                    && y < a.position.y + a.size.height as i32
+            })
+        })
+    };
+    if let Some((x, y)) = settings.position.filter(|&(x, y)| on_screen(x, y)) {
         let _ = cat.set_position(Position::Physical(PhysicalPosition::new(x, y)));
         keep_on_screen(&cat);
     } else if let Ok(Some(monitor)) = app.primary_monitor() {
@@ -352,9 +369,29 @@ pub fn start_capture(app: &AppHandle) {
         else {
             continue;
         };
-        let _ = win.set_position(Position::Physical(*monitor.position()));
-        let _ = win.set_size(Size::Physical(*monitor.size()));
-        let _ = win.show();
+        // Linux: сначала показать, потом ставить на монитор — позицию невидимого
+        // окна GTK не передаёт оконному менеджеру, и тот сам расставляет оверлеи.
+        // Затем полный экран именно на этом мониторе: иначе менеджер ужимает окно
+        // до рабочей области (без панелей), а с монитора с панелью и вовсе
+        // переносит на соседний. Номера мониторов у tao совпадают с номерами GDK.
+        #[cfg(target_os = "linux")]
+        {
+            let _ = win.show();
+            let _ = win.set_position(Position::Physical(*monitor.position()));
+            let _ = win.set_size(Size::Physical(*monitor.size()));
+            if let Ok(gtk_win) = win.gtk_window() {
+                use gtk::prelude::{GtkWindowExt, WidgetExt};
+                if let Some(screen) = WidgetExt::screen(&gtk_win) {
+                    gtk_win.fullscreen_on_monitor(&screen, i as i32);
+                }
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = win.set_position(Position::Physical(*monitor.position()));
+            let _ = win.set_size(Size::Physical(*monitor.size()));
+            let _ = win.show();
+        }
         if i == 0 {
             let _ = win.set_focus();
         }
@@ -384,19 +421,27 @@ pub fn cancel_capture(app: &AppHandle) {
     say(app, "передумал? ладно", 2.0);
 }
 
-/// Прямоугольник в логических координатах окна-оверлея с меткой `label`.
-pub fn finish_capture(app: &AppHandle, label: &str, x: f64, y: f64, width: f64, height: f64) {
+/// Прямоугольник `rect` (x, y, ширина, высота) — в CSS-пикселях страницы
+/// оверлея, `view` — её размер в тех же единицах. Масштаб считаем по факту:
+/// WebKitGTK растягивает страницу не только по scale_factor, но и по DPI шрифтов
+/// (у MATE это часто не 96), и выделение съезжало.
+pub fn finish_capture(app: &AppHandle, label: &str, rect: (f64, f64, f64, f64), view: (f64, f64)) {
     let Some(overlay) = app.get_webview_window(label) else {
         close_overlays(app);
         restore_cat(app);
         return;
     };
+    let (x, y, width, height) = rect;
+    let origin = overlay.inner_position().unwrap_or(PhysicalPosition::new(0, 0));
     let sf = overlay.scale_factor().unwrap_or(1.0);
-    let origin = overlay.outer_position().unwrap_or(PhysicalPosition::new(0, 0));
-    let px = origin.x + (x * sf).round() as i32;
-    let py = origin.y + (y * sf).round() as i32;
-    let pw = (width * sf).round().max(1.0) as u32;
-    let ph = (height * sf).round().max(1.0) as u32;
+    let (kx, ky) = match overlay.inner_size() {
+        Ok(size) if view.0 > 0.0 && view.1 > 0.0 => (size.width as f64 / view.0, size.height as f64 / view.1),
+        _ => (sf, sf),
+    };
+    let px = origin.x + (x * kx).round() as i32;
+    let py = origin.y + (y * ky).round() as i32;
+    let pw = (width * kx).round().max(1.0) as u32;
+    let ph = (height * ky).round().max(1.0) as u32;
 
     close_overlays(app);
 

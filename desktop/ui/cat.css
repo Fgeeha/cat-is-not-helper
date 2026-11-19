@@ -75,6 +75,7 @@
   border-radius: calc(12px * var(--k));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   text-align: center;
+  overflow-wrap: anywhere; /* длинные пути и имена ошибок не вылезают за окно */
   pointer-events: none;
 }
 .bubble::after {

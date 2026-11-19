@@ -104,14 +104,30 @@
     invoke('show_cat_menu');
   });
 
-  // Забрать: тянем из лапок наружу как файл. На Linux перетаскивание из окна
-  // в другие приложения ненадёжно, поэтому там же кладём в буфер обмена.
+  // Забрать: тянем из лапок наружу как файл. На Linux — свой перенос через GTK
+  // (drag_out): файл уходит из лапок, только если его действительно куда-то бросили.
+  let draggingOut = false;
   async function dragHeldOut() {
     const path = held.top.path;
     const icon = held.top.thumb;
     down = null;
     if (isLinux) {
-      await invoke('copy_held'); // X11: список файлов + PNG + путь, скажет «в буфере»
+      if (draggingOut) return;
+      draggingOut = true;
+      const unlisten = await listen('drag-out-finished', (e) => {
+        unlisten();
+        draggingOut = false;
+        if (e.payload) invoke('put_away', { message: 'забирай, твоё', path });
+        else cat.say('ладно, подержу ещё', 2);
+      });
+      try {
+        await invoke('drag_out', { path });
+      } catch (err) {
+        console.error('drag out failed', err);
+        unlisten();
+        draggingOut = false;
+      }
+      return;
     }
     try {
       await invoke('put_away', { message: null, path });
@@ -119,16 +135,13 @@
         const result = (event && (event.result || event.payload?.result)) || '';
         setTimeout(() => {
           if (held.paths.includes(path)) return; // вернули котику
-          if (isLinux) return; // сообщение про буфер уже показано
           cat.say(String(result).toLowerCase() === 'dropped' ? 'забирай, твоё' : 'ладно, отпустил');
         }, 100);
       });
     } catch (err) {
       console.error('drag out failed', err);
-      if (!isLinux) {
-        await invoke('give_shot', { path }); // вернуть в стопку
-        await invoke('copy_held');
-      }
+      await invoke('give_shot', { path }); // вернуть в стопку
+      await invoke('copy_held');
     }
   }
 

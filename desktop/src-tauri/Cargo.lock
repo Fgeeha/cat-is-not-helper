@@ -530,6 +530,7 @@ dependencies = [
  "chrono",
  "dirs 6.0.0",
  "futures-util",
+ "gtk",
  "image",
  "parking_lot",
  "rdev",
@@ -544,8 +545,10 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "trash",
+ "url",
  "x11rb",
  "xcap",
+ "zbus",
 ]
 
 [[package]]

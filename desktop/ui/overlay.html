@@ -50,7 +50,7 @@
         if (r.w < 4 || r.h < 4) { invoke('cancel_capture'); return; }
         sel.style.display = 'none';
         size.style.display = 'none';
-        invoke('finish_capture', { label, x: r.x, y: r.y, width: r.w, height: r.h });
+        invoke('finish_capture', { label, x: r.x, y: r.y, width: r.w, height: r.h, viewWidth: window.innerWidth, viewHeight: window.innerHeight });
       });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') invoke('cancel_capture'); });
       document.addEventListener('contextmenu', (e) => { e.preventDefault(); invoke('cancel_capture'); });
